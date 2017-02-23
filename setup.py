@@ -37,7 +37,7 @@ setup(
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
-        'Topic :: Software Development :: Build Tools',
+        'Intended Audience :: System Administrators',
 
         'License :: OSI Approved :: MIT License',
 
