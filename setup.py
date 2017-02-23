@@ -5,6 +5,7 @@ import versioneer
 setup(
     name='shipami',
     version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass().copy(),
     description='CLI tool to manage AWS AMI and Marketplace',
     url='http://github.com/wnkz/shipami',
     author='wnkz',
