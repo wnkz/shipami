@@ -1,0 +1,13 @@
+exclude .gitignore
+exclude .coverage
+exclude .travis.yml
+include README.md
+include setup.cfg
+prune .cache
+prune .git
+prune build
+prune dist
+recursive-exclude *.egg-info *
+recursive-include tests *
+include versioneer.py
+include shipami/_version.py
