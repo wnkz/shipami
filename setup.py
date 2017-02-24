@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 from codecs import open
 from os import path
 
-import versioneer
+from shipami import __version__
 
 here = path.abspath(path.dirname(__file__))
 
@@ -14,14 +14,13 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name='shipami',
 
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass().copy(),
+    version=__version__,
 
     description='CLI tool to manage AWS AMI and Marketplace',
     long_description=long_description,
 
     url='http://github.com/wnkz/shipami',
-    download_url='https://github.com/wnkz/shipami/archive/{}.tar.gz'.format(versioneer.get_version()),
+    download_url='https://github.com/wnkz/shipami/archive/{}.tar.gz'.format(__version__),
 
     author='wnkz',
     author_email='wnkz@users.noreply.github.com',
@@ -37,7 +36,7 @@ setup(
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
-        'Topic :: Software Development :: Build Tools',
+        'Intended Audience :: System Administrators',
 
         'License :: OSI Approved :: MIT License',
 

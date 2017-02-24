@@ -10,5 +10,3 @@ prune build
 prune dist
 recursive-exclude *.egg-info *
 recursive-include tests *
-include versioneer.py
-include shipami/_version.py
