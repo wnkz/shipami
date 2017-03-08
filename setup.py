@@ -53,12 +53,13 @@ setup(
 
     keywords='aws ec2 ami marketplace',
 
-    packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
 
     install_requires=[
-        'click',
-        'botocore',
-        'boto3'
+        'click==6.7',
+        'click-log',
+        'botocore>=1.5.0,<1.6.0',
+        'boto3>=1.4.4'
     ],
 
     entry_points={
