@@ -1,17 +1,34 @@
-shipami
-=======
+ShipAMI - CLI for simple AWS AMIs management
+============================================
 
-|Version|
+|Build Status| |Docs| |Version| |License|
 
-CLI tool to manage AWS AMI and Marketplace
+CLI for simple AWS AMIs management
 
 
-.. |Version| image:: http://img.shields.io/pypi/v/shipami.svg?style=flat
+.. _`stable docs`: https://shipami.readthedocs.io/en/stable/
+.. _`Read the Docs`: https://shipami.readthedocs.io/en/latest/
+
+.. |Build Status| image:: https://img.shields.io/travis/wnkz/shipami/master.svg?style=flat
+    :target: https://travis-ci.org/wnkz/shipami
+    :alt: Build Status
+
+.. |Docs| image:: https://readthedocs.org/projects/shipami/badge/?version=latest
+    :target: http://shipami.readthedocs.io/en/latest/?badge=latest
+    :alt: Read the docs
+
+.. |Version| image:: https://img.shields.io/pypi/v/shipami.svg?style=flat
     :target: https://pypi.python.org/pypi/shipami/
     :alt: Version
 
-Install
--------
+.. |License| image:: http://img.shields.io/pypi/l/shipami.svg?style=flat
+    :target: https://github.com/wnkz/shipami/blob/master/LICENSE
+    :alt: License
+
+Quick Start
+-----------
+
+Install with ``pip``:
 
 .. code-block:: sh
 
