@@ -1,5 +1,7 @@
 sudo: false
 language: python
+env:
+  - AWS_DEFAULT_REGION=eu-west-1
 python:
   - "2.7"
   - "3.3"
