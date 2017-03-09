@@ -6,6 +6,8 @@
 .. toctree::
   :maxdepth: 2
 
+  dummy
+
 .. include:: ../../README.rst
 
 Indices and tables
