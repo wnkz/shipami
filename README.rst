@@ -1,21 +1,14 @@
-ShipAMI - CLI for simple AWS AMIs management
-============================================
+ShipAMI - Simple AWS AMIs management
+====================================
 
-|Build Status| |Docs| |Version| |License|
+|Build Status| |Version| |License|
 
-Simple AWS AMIs management
+CLI for simple AWS AMIs management
 
-
-.. _`stable docs`: https://shipami.readthedocs.io/en/stable/
-.. _`Read the Docs`: https://shipami.readthedocs.io/en/latest/
 
 .. |Build Status| image:: https://img.shields.io/travis/wnkz/shipami/master.svg?style=flat
     :target: https://travis-ci.org/wnkz/shipami
     :alt: Build Status
-
-.. |Docs| image:: https://readthedocs.org/projects/shipami/badge/?version=latest
-    :target: https://shipami.readthedocs.io/en/latest/?badge=latest
-    :alt: Read the docs
 
 .. |Version| image:: https://img.shields.io/pypi/v/shipami.svg?style=flat
     :target: https://pypi.python.org/pypi/shipami/
