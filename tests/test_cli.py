@@ -16,7 +16,7 @@ def ec2():
     moto.mock_ec2().start()
     return boto3.resource('ec2', region_name='eu-west-1')
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='class')
 def base_image(ec2):
     instance = ec2.create_instances(
         ImageId='ami-42424242',
@@ -27,7 +27,7 @@ def base_image(ec2):
     )[0]
 
     image = instance.create_image(
-        Name='foo-1-0',
+        Name='foo',
         Description='Foo'
     )
     return image
@@ -48,7 +48,7 @@ class TestCli:
 
     def test_release(self, ec2, base_image):
         RELEASE = '1.0.0'
-        NAME = 'foo-1-0-0'
+        NAME = 'foo'
         image_number = len(ec2.meta.client.describe_images()['Images'])
 
         expected_tags = [
@@ -73,6 +73,6 @@ class TestCli:
 
         assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == image_number + 1
-        assert image.name == NAME
+        assert image.name == '{}-{}'.format(NAME, RELEASE)
 
         assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])

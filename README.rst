@@ -1,7 +1,7 @@
 ShipAMI - Simple AWS AMIs management
 ====================================
 
-|Build Status| |Version| |License|
+|Build Status| |Version| |Coverage| |License|
 
 CLI for simple AWS AMIs management
 
@@ -13,6 +13,10 @@ CLI for simple AWS AMIs management
 .. |Version| image:: https://img.shields.io/pypi/v/shipami.svg?style=flat
     :target: https://pypi.python.org/pypi/shipami/
     :alt: Version
+
+.. |Coverage| image:: https://coveralls.io/repos/github/wnkz/shipami/badge.svg
+    :target: https://coveralls.io/github/wnkz/shipami
+    :alt: Coverage
 
 .. |License| image:: https://img.shields.io/pypi/l/shipami.svg?style=flat
     :target: https://github.com/wnkz/shipami/blob/master/LICENSE

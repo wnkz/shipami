@@ -9,7 +9,8 @@ import botocore.vendored.requests.packages.urllib3 as urllib3
 urllib3.disable_warnings(urllib3.exceptions.SecurityWarning)
 
 logging.basicConfig()
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('shipami.cli')
+
 
 class ShipAMI(object):
 
@@ -18,7 +19,6 @@ class ShipAMI(object):
 
     def __init__(self, region=None):
         self._region = region or boto3.session.Session().region_name
-        self._session = boto3.session.Session(region_name=self._region)
         self._sessions = {}
 
     def __get_session(self, region=None):
@@ -28,6 +28,16 @@ class ShipAMI(object):
             self._sessions[region] = boto3.session.Session(region_name=region)
             session = self._sessions[region]
         return session
+
+    def validate_ami_name(self, name, clean=False):
+        allowed = ['(', ')', '[', ']', ' ', '.', '/', '-', '\'', '@', '_']
+
+        if len(name) < 3 or len(name) > 128:
+            raise click.BadParameter('AMI Name must be 3-128 long')
+
+        if clean:
+            return ''.join(map(lambda _: _ if _.isalnum() or _ in allowed else '-', name))
+        return name
 
     def list(self):
         ec2 = self.__get_session().client('ec2')
@@ -39,6 +49,7 @@ class ShipAMI(object):
         )
 
         images = r['Images']
+        images = sorted(images, key=lambda _: _['CreationDate'], reverse=True)
         managed_images = filter(lambda _: self.__is_managed(_), images)
         unmanaged_images = filter(lambda _: not self.__is_managed(_), images)
 
@@ -50,64 +61,85 @@ class ShipAMI(object):
             'unmanaged': unmanaged_images
         }
 
+    def __get_copied_from_image(self, copied_from):
+        region, image_id = copied_from.split(':')
+        image = self.__get_session(region).resource('ec2').Image(image_id)
+        return image
+
+    def __remove_copied_to(self, image, to_remove):
+        copied_to = self.__get_tag(image, 'shipami:copied_to')
+        logger.debug('removing "{}" from {} shipami:copied_to tag'.format(to_remove, image.id))
+        logger.debug('shipami:copied_to: {}'.format(copied_to))
+
+        copied_to = copied_to.split(',')
+        copied_to = filter(lambda _: _ != to_remove, copied_to)
+        copied_to = ','.join(copied_to)
+
+        if copied_to:
+            logger.debug('set shipami:copied_to: {}'.format(copied_to))
+            self.__set_tag(image, 'shipami:copied_to', copied_to)
+        else:
+            logger.debug('removed shipami:copied_to')
+            self.__delete_tag(image, 'shipami:copied_to')
+
+    def __get_image_region(self, image):
+        return image.meta.client.meta.region_name
+
+    def __generate_copy_tag(self, image):
+        return '{}:{}'.format(self.__get_image_region(image), image.id)
+
     def delete(self, image_ids, force=False):
         ec2 = self.__get_session().resource('ec2')
+        deleted = []
 
         for image_id in image_ids:
             image = ec2.Image(image_id)
 
-            if not self.__is_managed(image) and not force:
-                logger.error('AMI [{}] is not managed by shipami'.format(image.id))
-                raise click.Abort
-
-            try:
-                image.deregister(DryRun=True)
-            except botocore.exceptions.ClientError as e:
-                if e.response['Error']['Code'] == 'DryRunOperation':
-
-                    # TODO: Refactor
-                    copied_from = self.__get_tag(image, 'shipami:copied_from')
-                    if copied_from:
-                        from_region, from_image_id = copied_from.split(':')
-                        from_image = self.__get_session(from_region).resource('ec2').Image(from_image_id)
-                        copied_to = self.__get_tag(from_image, 'shipami:copied_to')
-                        logger.info('Removing {} from {} shipami:copied_to tag'.format(image.id, from_image.id))
-                        copied_to = copied_to.split(',')
-                        copied_to = filter(lambda _: _.split(':')[1] != image.id, copied_to)
-                        copied_to = ','.join(copied_to)
-                        if copied_to:
-                            self.__set_tag(from_image, 'shipami:copied_to', copied_to)
-                        else:
-                            self.__delete_tag(from_image, 'shipami:copied_to')
-                    #
-
-                    logger.info('Deregistering {}'.format(image.id))
-                    snapshots = self.__get_image_snapshots(image)
-                    image.deregister()
-                    for snapshot in snapshots:
-                        logger.info('Deleting {}'.format(snapshot.id))
-                        snapshot.delete()
-                else:
-                    logger.error('Cannot delete AMI [{}]'.format(image.id))
+            if not self.__is_managed(image):
+                if not force:
+                    logger.error('AMI [{}] is not managed by shipami'.format(image.id))
                     raise click.Abort
 
-    def release(self, image_id, release, name=None, description=None, source_region=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
-        src_image = self.__get_session(source_region).resource('ec2').Image(image_id)
-        rls_image = self.__copy_image(src_image, name=name, description=description, copy_tags=copy_tags, copy_tags_to_snapshots=copy_tags_to_snapshots, wait=wait)
-        self.__set_tag(rls_image, 'shipami:release', release)
-        return rls_image.id
+            copied_from = self.__get_tag(image, 'shipami:copied_from')
+            from_image = self.__get_copied_from_image(copied_from)
+            remove_copied_to = self.__generate_copy_tag(image)
+
+            try:
+                snapshots = self.__get_image_snapshots(image)
+                logger.debug('deregistering {}'.format(image.id))
+                image.deregister()
+                for snapshot in snapshots:
+                    logger.debug('deleting {}'.format(snapshot.id))
+                    snapshot.delete()
+            except botocore.exceptions.ClientError as e:
+                logger.error(e)
+                raise click.Abort
+
+            self.__remove_copied_to(from_image, remove_copied_to)
+            deleted.append(image_id)
+        return deleted
+
+    def copy(self, image_id, **kwargs):
+        src_image = self.__get_session(kwargs.pop('source_region')).resource('ec2').Image(image_id)
+        dst_image = self.__copy_image(src_image, **kwargs)
+        return dst_image.id
+
+    def release(self, image_id, release, **kwargs):
+        image = self.__get_session().resource('ec2').Image(self.copy(image_id, name_suffix=release, **kwargs))
+        self.__set_tag(image, 'shipami:release', release)
+        return image.id
 
     def share(self, image_id, account_id=None, remove=False):
         image = self.__get_session().resource('ec2').Image(image_id)
         account_id = account_id or self.MARKETPLACE_ACCOUNT_ID
         operation = 'add' if not remove else 'remove'
-        operation_log = 'Adding' if not remove else 'Removing'
+        operation_log = 'adding' if not remove else 'removing'
 
-        logger.info('{} permissions for {} on image {} ...'.format(operation_log, account_id, image.id))
+        logger.debug('{} permissions for {} on image {}'.format(operation_log, account_id, image.id))
         self.__wait_for_image(image)
         self.__share_modify_attribute(image, 'launchPermission', operation, account_id)
         for snapshot in self.__get_image_snapshots(image):
-            logger.info('{} permissions for {} on snapshot {} ...'.format(operation_log, account_id, snapshot.id))
+            logger.debug('{} permissions for {} on snapshot {}'.format(operation_log, account_id, snapshot.id))
             self.__wait_for_snapshot(snapshot)
             self.__share_modify_attribute(snapshot, 'createVolumePermission', operation, account_id)
 
@@ -120,12 +152,15 @@ class ShipAMI(object):
             ]
         )
 
-    def __copy_image(self, src_image, name=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, wait=False):
+    def __copy_image(self, src_image, name=None, name_suffix=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
         name = name or src_image.name
+        if name_suffix:
+            name = '-'.join([name, name_suffix])
+        name = self.validate_ami_name(name, clean=True)
         description = description or src_image.description
         src_region = src_image.meta.client.meta.region_name
 
-        logger.info('Copying image {} from {} to {} ...'.format(src_image.id, src_region, self._region))
+        logger.debug('copying image {} from {} to {}'.format(src_image.id, src_region, self._region))
 
         r = self.__get_session().client('ec2').copy_image(
             SourceRegion=src_region,
@@ -145,29 +180,24 @@ class ShipAMI(object):
             # TODO: Find a way to filter tags properly when copying
             self.__delete_tag(dst_image, 'shipami:copied_to')
 
+        # TODO: implement copy_permissions
+
         if wait:
             self.__wait_for_image(dst_image)
 
         return dst_image
 
     def __copy_tags(self, src_image, dst_image, copy_to_snapshots=False):
-        logger.info('Copying tags from image {} to image {} ...'.format(src_image.id, dst_image.id))
+        logger.debug('copying tags from image {} to image {}'.format(src_image.id, dst_image.id))
 
         dst_image.create_tags(Tags=src_image.tags)
         if copy_to_snapshots:
             for snapshot in self.__get_image_snapshots(dst_image):
-                logger.info('  Copying tags to snapshot {} ...'.format(snapshot.id))
+                logger.debug('copying tags to snapshot {}'.format(snapshot.id))
                 snapshot.create_tags(Tags=src_image.tags)
 
     def __set_managed(self, image):
-        image.create_tags(
-            Tags=[
-                {
-                    'Key': 'shipami:managed',
-                    'Value': 'True'
-                }
-            ]
-        )
+        self.__set_tag(image, 'shipami:managed', 'True')
 
     def __append_tag(self, obj, key, value):
         p_value = self.__get_tag(obj, key)
@@ -211,34 +241,34 @@ class ShipAMI(object):
             return True
         return False
 
-    # DEPRECATED
-    def __is_ami_shared(self, image, ec2=None):
-        for snapshot in self.__get_image_snapshots(image, ec2):
-            if not self.__is_snapshot_shared(snapshot):
-                return False
-        return self.__is_image_shared(image)
-
-    # DEPRECATED
-    def __is_image_shared(self, image):
-        r = image.describe_attribute(
-            Attribute='launchPermission'
-        )
-
-        for permission in r['LaunchPermissions']:
-            if permission['UserId'] == self.MARKETPLACE_ACCOUNT_ID:
-                return True
-        return False
-
-    # DEPRECATED
-    def __is_snapshot_shared(self, snapshot):
-        r = snapshot.describe_attribute(
-            Attribute='createVolumePermission'
-        )
-
-        for permission in r['CreateVolumePermissions']:
-            if permission['UserId'] == self.MARKETPLACE_ACCOUNT_ID or permission['UserId'] == 'aws-marketplace':
-                return True
-        return False
+    # # DEPRECATED
+    # def __is_ami_shared(self, image, ec2=None):
+    #     for snapshot in self.__get_image_snapshots(image, ec2):
+    #         if not self.__is_snapshot_shared(snapshot):
+    #             return False
+    #     return self.__is_image_shared(image)
+    #
+    # # DEPRECATED
+    # def __is_image_shared(self, image):
+    #     r = image.describe_attribute(
+    #         Attribute='launchPermission'
+    #     )
+    #
+    #     for permission in r['LaunchPermissions']:
+    #         if permission['UserId'] == self.MARKETPLACE_ACCOUNT_ID:
+    #             return True
+    #     return False
+    #
+    # # DEPRECATED
+    # def __is_snapshot_shared(self, snapshot):
+    #     r = snapshot.describe_attribute(
+    #         Attribute='createVolumePermission'
+    #     )
+    #
+    #     for permission in r['CreateVolumePermissions']:
+    #         if permission['UserId'] == self.MARKETPLACE_ACCOUNT_ID or permission['UserId'] == 'aws-marketplace':
+    #             return True
+    #     return False
 
     def __get_image_snapshots(self, image):
         region_name = image.meta.client.meta.region_name
@@ -253,7 +283,7 @@ class ShipAMI(object):
         return snapshots
 
     def __wait_for_image(self, image, state='available'):
-        logger.debug('Waiting for image {} to be {} ...'.format(image.id, state))
+        logger.debug('waiting for image {} to be {}'.format(image.id, state))
         image.wait_until_exists(
             Filters=[
                 {
@@ -264,9 +294,10 @@ class ShipAMI(object):
                 }
             ]
         )
+        image.reload()
 
     def __wait_for_snapshot(self, snapshot):
-        logger.debug('Waiting for snapshot {} to be ready ...'.format(snapshot.id))
+        logger.debug('waiting for snapshot {} to be ready'.format(snapshot.id))
         snapshot.wait_until_completed(
             Filters=[
                 {
@@ -278,9 +309,10 @@ class ShipAMI(object):
                 }
             ]
         )
+        snapshot.reload()
 
     def __wait_for_block_devices(self, image):
-        logger.debug('Waiting for block devices ...')
+        logger.debug('waiting for block devices')
         while not image.block_device_mappings:
             image.reload()
             time.sleep(1)
