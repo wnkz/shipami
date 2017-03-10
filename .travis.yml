@@ -2,6 +2,8 @@ sudo: false
 language: python
 env:
   - AWS_DEFAULT_REGION=eu-west-1
+install:
+    - pip install coveralls
 python:
   - "2.7"
   - "3.3"
@@ -9,3 +11,5 @@ python:
   - "3.5"
   - "3.6"
 script: python setup.py test
+after_success:
+  - coveralls
