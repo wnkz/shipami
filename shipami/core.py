@@ -33,7 +33,7 @@ class ShipAMI(object):
         allowed = ['(', ')', '[', ']', ' ', '.', '/', '-', '\'', '@', '_']
 
         if len(name) < 3 or len(name) > 128:
-            raise click.BadParameter('AMI Name must be 3-128 long')
+            raise click.BadParameter('AMI Name must be 3-128 long (got: "{}")'.format(name))
 
         if clean:
             return ''.join(map(lambda _: _ if _.isalnum() or _ in allowed else '-', name))
@@ -50,8 +50,8 @@ class ShipAMI(object):
 
         images = r['Images']
         images = sorted(images, key=lambda _: _['CreationDate'], reverse=True)
-        managed_images = filter(lambda _: self.__is_managed(_), images)
-        unmanaged_images = filter(lambda _: not self.__is_managed(_), images)
+        managed_images = list(filter(lambda _: self.__is_managed(_), images))
+        unmanaged_images = list(filter(lambda _: not self.__is_managed(_), images))
 
         for image in managed_images:
             image['shipami:copied_from'] = self.__get_tag(image, 'shipami:copied_from')

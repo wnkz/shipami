@@ -52,19 +52,32 @@ class TestCli:
         assert r.exit_code == 0
         assert VERSION in r.output
 
-    def test_list(self, base_image):
+    def test_list_unmanaged(self, base_image):
         r = runner.invoke(shipami, ['list'])
 
         assert r.exit_code == 0
         assert '{}:\t{}'.format(base_image.id, base_image.name) in r.output
 
-    def test_show(self, base_image):
+    def test_list(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list'])
+
+        print(r.output)
+
+        assert r.exit_code == 0
+        assert '{}:\t{} (to: eu-west-1:{})'.format(base_image.id, base_image.name, released_image.id) in r.output
+        assert '{}:\t{} [{}] (from: eu-west-1:{})'.format(released_image.id, released_image.name, released_image.state, base_image.id) in r.output
+
+    def test_show_unmanaged(self, base_image):
         r = runner.invoke(shipami, ['show', base_image.id])
 
         assert r.exit_code == 0
 
+    def test_show_managed(self, released_image):
+        r = runner.invoke(shipami, ['show', released_image.id])
+
+        assert r.exit_code == 0
+
     def test_copy(self, ec2, base_image):
-        NAME = 'foo'
         image_number = len(ec2.meta.client.describe_images()['Images'])
 
         expected_tags = [
@@ -87,6 +100,48 @@ class TestCli:
         assert len(ec2.meta.client.describe_images()['Images']) == image_number + 1
         assert image.name == base_image.name
         assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])
+
+    def test_copy_wait(self, ec2, base_image):
+        image_number = len(ec2.meta.client.describe_images()['Images'])
+
+        expected_tags = [
+            {
+                'Key': 'shipami:managed',
+                'Value': 'True'
+            },
+            {
+                'Key': 'shipami:copied_from',
+                'Value': 'eu-west-1:{}'.format(base_image.id)
+            }
+        ]
+
+        r = runner.invoke(shipami, ['copy', base_image.id, '--wait'])
+
+        returned_image_id = r.output.strip()
+        image = ec2.Image(returned_image_id)
+
+        assert r.exit_code == 0
+        assert len(ec2.meta.client.describe_images()['Images']) == image_number + 1
+        assert image.name == base_image.name
+        assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])
+
+    def test_copy_invalid_name(self, base_image):
+        NAME = 'aa'
+
+        r = runner.invoke(shipami, ['copy', base_image.id, '--name', NAME])
+
+        assert 'Invalid value' in r.output
+
+    def test_copy_cleanup_name(self, ec2, base_image):
+        NAME = 'foo#bar'
+
+        r = runner.invoke(shipami, ['copy', base_image.id, '--name', NAME])
+
+        returned_image_id = r.output.strip()
+        image = ec2.Image(returned_image_id)
+
+        assert r.exit_code == 0
+        assert image.name == 'foo-bar'
 
     def test_release(self, ec2, base_image):
         RELEASE = '1.0.0'
@@ -124,8 +179,16 @@ class TestCli:
 
         returned_image_id = r.output.strip()
 
+        assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == 1
         assert returned_image_id == released_image_id
+
+    def test_delete_error(self, base_image):
+        base_image_id = base_image.id
+        r = runner.invoke(shipami, ['delete', base_image_id])
+
+        assert r.exit_code == 1
+        assert 'Aborted!' in r.output
 
     def test_delete_force(self, ec2, base_image):
         base_image_id = base_image.id
@@ -133,5 +196,6 @@ class TestCli:
 
         returned_image_id = r.output.strip()
 
+        assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == 0
         assert returned_image_id == base_image_id
