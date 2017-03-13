@@ -30,3 +30,43 @@ Install with ``pip``:
 .. code-block:: sh
 
     $ pip install shipami
+    $ shipami --help
+
+
+Commands
+--------
+
+.. note::
+
+   In the examples, we consider you have the following:
+    - AWS credentials correctly configured and sufficient permissions
+    - A base AMI with the ID ``ami-00000000`` and NAME ``foo``
+
+
+* ``list``
+
+.. code-block:: sh
+
+  $ shipami list
+  Managed images:
+
+
+  Unmanaged images:
+
+  	ami-00000000:	foo
+
+
+* ``copy``
+
+.. code-block:: sh
+
+  $ shipami copy ami-00000000
+  ami-000000aa
+  $ shipami list
+  Managed images:
+
+    ami-000000aa:	foo [pending] (from: eu-west-1:ami-00000000)
+
+  Unmanaged images:
+
+  	ami-00000000:	foo (to: eu-west-1:ami-000000aa)

@@ -61,15 +61,17 @@ def list(shipami):
 def show(shipami, image_id):
     image = shipami.show(image_id)
     click.echo('{} ({}) [{}]'.format(image['ImageId'], image['Name'], image['State']))
-    click.echo('tags:')
-    for tag in sorted(image['Tags'], key=lambda _: _['Key'], reverse=True):
-        key = tag.get('Key')
-        value = tag.get('Value')
-        if 'shipami:' in key:
-            color = 'blue'
-        else:
-            color = 'white'
-        click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
+
+    if image.get('Tags'):
+        click.echo('tags:')
+        for tag in sorted(image['Tags'], key=lambda _: _['Key'], reverse=True):
+            key = tag.get('Key')
+            value = tag.get('Value')
+            if 'shipami:' in key:
+                color = 'blue'
+            else:
+                color = 'white'
+            click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
 
     click.echo('devices mappings:')
     for block_device_mapping in image['BlockDeviceMappings']:
