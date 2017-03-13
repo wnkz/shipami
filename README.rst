@@ -40,10 +40,12 @@ Publish AMI for AWS Marketplace
 
   $ shipami --region us-east-1 release ami-00000000 1.0 --source-region eu-west-1
   ami-000000aa
+
   $ shipami --region us-east-1 list
   Managed images:
 
     ami-000000aa: foo-1.0 [pending] (from: eu-west-1:ami-00000000)
+
   $ shipami --region us-east-1 show ami-000000aa
   ami-000000aa (foo-1.0) [pending]
   tags:
@@ -52,7 +54,9 @@ Publish AMI for AWS Marketplace
     shipami:copied_from: eu-west-1:ami-00000000
   devices mappings:
     /dev/xvda 8Go type:gp2
+
   $ shipami --region us-east-1 share ami-000000aa
+
   $ shipami --region us-east-1 show ami-000000aa
   ami-000000aa (foo-1.0) [available]
   tags:
@@ -74,17 +78,6 @@ Commands
     - A base AMI with the ID ``ami-00000000`` and NAME ``foo``
 
 
-``list``
---------
-
-.. code-block:: sh
-
-  $ shipami list
-  Unmanaged images:
-
-  	ami-00000000:	foo
-
-
 ``copy``
 --------
 
@@ -101,6 +94,22 @@ Commands
 
     ami-00000000: foo (to: eu-west-1:ami-000000aa)
 
+
+``delete``
+----------
+
+
+``list``
+--------
+
+.. code-block:: sh
+
+  $ shipami list
+  Unmanaged images:
+
+  	ami-00000000:	foo
+
+
 ``release``
 -----------
 
@@ -116,3 +125,11 @@ Commands
   Unmanaged images:
 
     ami-00000000: foo (to: eu-west-1:ami-000000aa)
+
+
+``share``
+---------
+
+
+``show``
+--------
