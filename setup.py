@@ -68,12 +68,12 @@ setup(
     },
 
     setup_requires=[
-        'pytest-runner'
+        'pytest-runner>=2,<3dev'
     ],
 
     tests_require=[
-        'pytest',
-        'pytest-cov'
+        'pytest>=3.0.6',
+        'moto>=0.4.31'
     ],
 
     zip_safe=False
