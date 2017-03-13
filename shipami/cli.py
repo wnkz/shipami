@@ -35,13 +35,61 @@ def list(shipami):
         'failed': 'red'
     }
 
-    click.echo('Managed images:\n')
-    for image in r['managed']:
-        click.secho('\t{}:\t{} [{}] (Copied from: {})'.format(image['ImageId'], image['Name'], image['State'], image['ShipAMI:copied_from']), fg=state_colors[image['State']])
+    click.echo('Managed images:')
     click.echo()
-    click.echo('Unmanaged images:\n')
+    for image in r['managed']:
+        click.secho('\t{}:\t{} [{}] (from: {})'.format(
+                image['ImageId'],
+                image['Name'],
+                image['State'],
+                image['shipami:copied_from'] or 'unknown'
+            ),
+            fg=state_colors[image['State']]
+        )
+    click.echo()
+    click.echo('Unmanaged images:')
+    click.echo()
     for image in r['unmanaged']:
-        click.echo('\t{}:\t{}'.format(image['ImageId'], image['Name']))
+        click.echo('\t{}:\t{}'.format(image['ImageId'], image['Name']), nl=False)
+        if image['shipami:copied_to']:
+            click.secho(' (to: {})'.format(image['shipami:copied_to']), nl=False, fg='blue')
+        click.echo()
+
+@cli.command()
+@click.argument('image-id')
+@click.pass_obj
+def show(shipami, image_id):
+    image = shipami.show(image_id)
+    click.echo('{} ({}) [{}]'.format(image['ImageId'], image['Name'], image['State']))
+    click.echo('tags:')
+    for tag in sorted(image['Tags'], key=lambda _: _['Key'], reverse=True):
+        key = tag.get('Key')
+        value = tag.get('Value')
+        if 'shipami:' in key:
+            color = 'blue'
+        else:
+            color = 'white'
+        click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
+
+    click.echo('devices mappings:')
+    for block_device_mapping in image['BlockDeviceMappings']:
+        click.echo('  {} {}Go type:{}'.format(
+                block_device_mapping['DeviceName'],
+                block_device_mapping['Ebs']['VolumeSize'],
+                block_device_mapping['Ebs']['VolumeType']
+            )
+        )
+    if image.get('Shares'):
+        click.echo('shared with:')
+        for share in image.get('Shares'):
+            click.echo('  {}'.format(share['UserId']), nl=False)
+            if share.get('Marketplace') is not None:
+                click.echo(' (AWS MARKETPLACE)', nl=False)
+                if share.get('Marketplace') is True:
+                    click.secho(' OK', fg='green', nl=False)
+                else:
+                    click.secho(' PARTIAL', fg='yellow', nl=False)
+            click.echo()
 
 
 @cli.command()

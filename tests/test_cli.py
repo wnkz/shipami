@@ -8,7 +8,7 @@ from shipami.cli import cli as shipami
 
 runner = CliRunner()
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def ec2():
     import boto3
     import moto
@@ -16,7 +16,7 @@ def ec2():
     moto.mock_ec2().start()
     return boto3.resource('ec2', region_name='eu-west-1')
 
-@pytest.fixture(scope='class')
+@pytest.fixture()
 def base_image(ec2):
     instance = ec2.create_instances(
         ImageId='ami-42424242',
@@ -32,6 +32,18 @@ def base_image(ec2):
     )
     return image
 
+@pytest.fixture()
+def released_image(ec2, base_image):
+    RELEASE = '1.0.0'
+    NAME = 'foo'
+
+    r = runner.invoke(shipami, ['release', base_image.id, RELEASE, '--name', NAME])
+
+    image_id = r.output.strip()
+    image = ec2.Image(image_id)
+    return image
+
+
 class TestCli:
 
     def test_version(self):
@@ -45,6 +57,36 @@ class TestCli:
 
         assert r.exit_code == 0
         assert '{}:\t{}'.format(base_image.id, base_image.name) in r.output
+
+    def test_show(self, base_image):
+        r = runner.invoke(shipami, ['show', base_image.id])
+
+        assert r.exit_code == 0
+
+    def test_copy(self, ec2, base_image):
+        NAME = 'foo'
+        image_number = len(ec2.meta.client.describe_images()['Images'])
+
+        expected_tags = [
+            {
+                'Key': 'shipami:managed',
+                'Value': 'True'
+            },
+            {
+                'Key': 'shipami:copied_from',
+                'Value': 'eu-west-1:{}'.format(base_image.id)
+            }
+        ]
+
+        r = runner.invoke(shipami, ['copy', base_image.id])
+
+        returned_image_id = r.output.strip()
+        image = ec2.Image(returned_image_id)
+
+        assert r.exit_code == 0
+        assert len(ec2.meta.client.describe_images()['Images']) == image_number + 1
+        assert image.name == base_image.name
+        assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])
 
     def test_release(self, ec2, base_image):
         RELEASE = '1.0.0'
@@ -74,5 +116,22 @@ class TestCli:
         assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == image_number + 1
         assert image.name == '{}-{}'.format(NAME, RELEASE)
-
         assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])
+
+    def test_delete(self, ec2, released_image):
+        released_image_id = released_image.id
+        r = runner.invoke(shipami, ['delete', released_image_id])
+
+        returned_image_id = r.output.strip()
+
+        assert len(ec2.meta.client.describe_images()['Images']) == 1
+        assert returned_image_id == released_image_id
+
+    def test_delete_force(self, ec2, base_image):
+        base_image_id = base_image.id
+        r = runner.invoke(shipami, ['delete', '--force', base_image_id])
+
+        returned_image_id = r.output.strip()
+
+        assert len(ec2.meta.client.describe_images()['Images']) == 0
+        assert returned_image_id == base_image_id
