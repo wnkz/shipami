@@ -35,25 +35,30 @@ def list(shipami):
         'failed': 'red'
     }
 
-    click.echo('Managed images:')
-    click.echo()
-    for image in r['managed']:
-        click.secho('\t{}:\t{} [{}] (from: {})'.format(
-                image['ImageId'],
-                image['Name'],
-                image['State'],
-                image['shipami:copied_from'] or 'unknown'
-            ),
-            fg=state_colors[image['State']]
-        )
-    click.echo()
-    click.echo('Unmanaged images:')
-    click.echo()
-    for image in r['unmanaged']:
-        click.echo('\t{}:\t{}'.format(image['ImageId'], image['Name']), nl=False)
-        if image['shipami:copied_to']:
-            click.secho(' (to: {})'.format(image['shipami:copied_to']), nl=False, fg='blue')
+    if r['managed']:
+        click.echo('Managed images:')
         click.echo()
+        for image in r['managed']:
+            click.secho('\t{}:\t{} [{}] (from: {})'.format(
+                    image['ImageId'],
+                    image['Name'],
+                    image['State'],
+                    image['shipami:copied_from'] or 'unknown'
+                ),
+                fg=state_colors[image['State']]
+            )
+
+    if r['managed'] and r['unmanaged']:
+        click.echo()
+
+    if r['unmanaged']:
+        click.echo('Unmanaged images:')
+        click.echo()
+        for image in r['unmanaged']:
+            click.echo('\t{}:\t{}'.format(image['ImageId'], image['Name']), nl=False)
+            if image['shipami:copied_to']:
+                click.secho(' (to: {})'.format(image['shipami:copied_to']), nl=False, fg='blue')
+            click.echo()
 
 @cli.command()
 @click.argument('image-id')
