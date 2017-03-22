@@ -122,8 +122,9 @@ class ShipAMI(object):
                     raise click.Abort
             else:
                 copied_from = self.__get_tag(image, 'shipami:copied_from')
-                from_image = self.__get_copied_from_image(copied_from)
-                remove_copied_to = self.__generate_copy_tag(image)
+                if copied_from:
+                    from_image = self.__get_copied_from_image(copied_from)
+                    remove_copied_to = self.__generate_copy_tag(image)
 
             try:
                 snapshots = self.__get_image_snapshots(image)
@@ -136,7 +137,7 @@ class ShipAMI(object):
                 logger.error(e)
                 raise click.Abort
 
-            if managed:
+            if managed and copied_from:
                 self.__remove_copied_to(from_image, remove_copied_to)
 
             deleted.append(image_id)
@@ -151,24 +152,28 @@ class ShipAMI(object):
         src_region = src_image.meta.client.meta.region_name
 
         logger.debug('copying image {} from {} to {}'.format(src_image.id, src_region, self._region))
-
-        r = self.__get_session().client('ec2').copy_image(
-            SourceRegion=src_region,
-            SourceImageId=src_image.id,
-            Name=name,
-            Description=description
-        )
+        try:
+            r = self.__get_session().client('ec2').copy_image(
+                SourceRegion=src_region,
+                SourceImageId=src_image.id,
+                Name=name,
+                Description=description
+            )
+        except botocore.exceptions.ClientError as e:
+            logger.error(e)
+            raise click.Abort
 
         dst_image = self.__get_session().resource('ec2').Image(r['ImageId'])
         self.__append_tag(src_image, 'shipami:copied_to', '{}:{}'.format(self._region, dst_image.id))
-        self.__set_managed(dst_image)
-        self.__set_tag(dst_image, 'shipami:copied_from', '{}:{}'.format(src_region, src_image.id))
 
         if copy_tags:
             self.__copy_tags(src_image, dst_image, copy_tags_to_snapshots)
             # removes irrelevant 'copied_to' tag
             # TODO: Find a way to filter tags properly when copying
             self.__delete_tag(dst_image, 'shipami:copied_to')
+
+        self.__set_managed(dst_image)
+        self.__set_tag(dst_image, 'shipami:copied_from', '{}:{}'.format(src_region, src_image.id))
 
         # TODO: implement copy_permissions
 
@@ -245,7 +250,13 @@ class ShipAMI(object):
         self.__set_tag(obj, key, value)
 
     def __get_tag(self, obj, key):
-        tags = obj.get('Tags', []) if type(obj) is dict else obj.tags
+        try:
+            tags = obj.tags or []
+        except AttributeError:
+            try:
+                tags = obj.get('Tags', [])
+            except AttributeError:
+                return None
 
         for tag in tags:
             if tag.get('Key') == key:
@@ -275,7 +286,7 @@ class ShipAMI(object):
         )
 
     def __is_managed(self, image):
-        if self.__get_tag(image, 'shipami:managed'):
+        if self.__get_tag(image, 'shipami:managed') == 'True':
             return True
         return False
 

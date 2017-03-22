@@ -141,7 +141,7 @@ def share(shipami, **kwargs):
 
 @cli.command()
 @click.argument('image-id', nargs=-1)
-@click.option('--force', is_flag=True, default=False)
+@click.option('--force', '-f', is_flag=True, default=False)
 @click.pass_obj
 def delete(shipami, image_id, force):
     for deleted in shipami.delete(image_id, force):
