@@ -42,9 +42,6 @@ def cli(ctx, region, verbose):
 @click.option('--color/--no-color', default=True)
 @click.pass_obj
 def list(shipami, filter_, quiet, color):
-    now = datetime.datetime.utcnow()
-    images = shipami.list()
-
     headers = ['NAME', 'RELEASE', 'ID', 'STATE', 'CREATED', 'MANAGED', 'COPIED FROM', 'COPIED TO']
     headers_mapping = {
         'NAME': 'Name',
@@ -61,6 +58,10 @@ def list(shipami, filter_, quiet, color):
     filters_mapping = {}
     for f in filters:
         filters_mapping[f.strip().lower()] = f
+
+    for k, v in filter_:
+        if k not in filters_mapping.keys():
+            raise click.BadParameter('available filters are {}'.format(filters_mapping.keys()))
 
     state_colors = {
         'available': 'green',
@@ -79,9 +80,10 @@ def list(shipami, filter_, quiet, color):
             return v in x
         return f
 
+    now = datetime.datetime.utcnow()
+    images = shipami.list()
+
     for k, v in filter_:
-        if k not in filters_mapping.keys():
-            raise click.BadParameter('available filters are {}'.format(filters_mapping.keys()))
         attr = headers_mapping.get(filters_mapping.get(k))
         images = filter(makefilter(k, v, attr), images)
 

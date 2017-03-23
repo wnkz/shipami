@@ -85,26 +85,53 @@ class TestCli:
         assert base_image.id in lines[1]
         assert released_image.id in lines[0]
 
-    def test_list_simple_filter(self, base_image, released_image):
+    def test_list_filter_simple(self, base_image, released_image):
         r = runner.invoke(shipami, ['list', '-f', 'release=1.0.0'])
 
         lines = r.output.splitlines()
 
         assert r.exit_code == 0
         assert len(lines) == 2
-        assert released_image.id in lines[1]
+        assert ' {} '.format(released_image.id) in lines[1]
 
-    def test_list_bad_filter(self, base_image, released_image):
+    def test_list_filter_managed(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-f', 'managed=yes'])
+
+        lines = r.output.splitlines()
+
+        assert r.exit_code == 0
+        assert len(lines) == 2
+        assert ' {} '.format(released_image.id) in lines[1]
+
+    def test_list_filter_not_managed(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-f', 'managed=no'])
+
+        lines = r.output.splitlines()
+
+        assert r.exit_code == 0
+        assert len(lines) == 2
+        assert ' {} '.format(base_image.id) in lines[1]
+
+    def test_list_filter_bad(self, base_image, released_image):
         r = runner.invoke(shipami, ['list', '-f', 'invalid'])
 
         assert r.exit_code == 2
         assert 'Invalid value' in r.output
 
-    def test_list_unknown_filter(self, base_image, released_image):
+    def test_list_filter_unknown(self, base_image, released_image):
         r = runner.invoke(shipami, ['list', '-f', 'invalid=42'])
 
         assert r.exit_code == 2
         assert 'Invalid value' in r.output
+
+    def test_list_filter_quiet(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-q', '-f', 'release=1.0.0'])
+
+        lines = r.output.splitlines()
+
+        assert r.exit_code == 0
+        assert len(lines) == 1
+        assert released_image.id in lines[0]
 
     def test_show_unmanaged(self, base_image):
         r = runner.invoke(shipami, ['show', base_image.id])
