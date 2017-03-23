@@ -4,11 +4,23 @@ import json
 import logging
 import click
 
+from tabulate import tabulate
+import datetime, timeago, dateutil.parser
+
 from shipami.core import ShipAMI
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
+def validate_filter(ctx, param, filters):
+    validated_filters = []
+    for f in filters:
+        try:
+            k, v = f.split('=')
+            validated_filters.append((k, v))
+        except ValueError:
+            raise click.BadParameter('filter must be in format "key=value"')
+    return tuple(validated_filters)
 
 @click.group()
 @click.version_option(VERSION)
@@ -25,9 +37,30 @@ def cli(ctx, region, verbose):
 
 
 @cli.command()
+@click.option('--quiet', '-q', is_flag=True)
+@click.option('filter_', '--filter', '-f', multiple=True, callback=validate_filter)
+@click.option('--color/--no-color', default=True)
 @click.pass_obj
-def list(shipami):
-    r = shipami.list()
+def list(shipami, filter_, quiet, color):
+    now = datetime.datetime.utcnow()
+    images = shipami.list()
+
+    headers = ['NAME', 'RELEASE', 'ID', 'STATE', 'CREATED', 'MANAGED', 'COPIED FROM', 'COPIED TO']
+    headers_mapping = {
+        'NAME': 'Name',
+        'RELEASE': 'Release',
+        'ID': 'ImageId',
+        'STATE': 'State',
+        'CREATED': 'CreationDate',
+        'MANAGED': 'Managed',
+        'COPIED FROM': 'CopiedFrom',
+        'COPIED TO': 'CopiedTo'
+    }
+
+    filters = ['NAME', 'RELEASE', 'ID', 'STATE', 'MANAGED']
+    filters_mapping = {}
+    for f in filters:
+        filters_mapping[f.strip().lower()] = f
 
     state_colors = {
         'available': 'green',
@@ -35,30 +68,54 @@ def list(shipami):
         'failed': 'red'
     }
 
-    if r['managed']:
-        click.echo('Managed images:')
-        click.echo()
-        for image in r['managed']:
-            click.secho('\t{}:\t{} [{}] (from: {})'.format(
-                    image['ImageId'],
-                    image['Name'],
-                    image['State'],
-                    image['shipami:copied_from'] or 'unknown'
-                ),
-                fg=state_colors[image['State']]
-            )
+    def makefilter(k, v, attr):
+        def f(_):
+            x = _.get(attr)
+            if x is None:
+                return False
+            if isinstance(x, bool):
+                bool_mapping = {'yes': True, 'no': False}
+                return x is bool_mapping.get(v)
+            return v in x
+        return f
 
-    if r['managed'] and r['unmanaged']:
-        click.echo()
+    for k, v in filter_:
+        if k not in filters_mapping.keys():
+            raise click.BadParameter('available filters are {}'.format(filters_mapping.keys()))
+        attr = headers_mapping.get(filters_mapping.get(k))
+        images = filter(makefilter(k, v, attr), images)
 
-    if r['unmanaged']:
-        click.echo('Unmanaged images:')
-        click.echo()
-        for image in r['unmanaged']:
-            click.echo('\t{}:\t{}'.format(image['ImageId'], image['Name']), nl=False)
-            if image['shipami:copied_to']:
-                click.secho(' (to: {})'.format(image['shipami:copied_to']), nl=False, fg='blue')
-            click.echo()
+    images = sorted(images, key=lambda _: _['CreationDate'], reverse=True)
+
+    if quiet:
+        for image in images: click.echo(image.get('ImageId'))
+    else:
+        d = []
+        for image in images:
+            row = []
+            for col in headers:
+                value = image.get(headers_mapping.get(col))
+                if col is 'STATE':
+                    if color:
+                        value = click.style(value, fg=state_colors.get(value))
+                if col is 'CREATED':
+                    value = timeago.format(dateutil.parser.parse(value, ignoretz=True), now)
+                if col is 'MANAGED':
+                    value = 'yes' if value else 'no'
+                    if color and value is 'yes':
+                        value = click.style(value, fg='white', bold=True)
+                if col is 'COPIED TO':
+                    if value and color:
+                        value = click.style(value, fg='blue')
+                if col is 'COPIED FROM':
+                    if value and color:
+                        value = click.style(value, fg='blue')
+                    if value is None and image.get(headers_mapping.get('MANAGED')) is False:
+                        value = 'origin'
+                row.append(value)
+            d.append(row)
+        if d: print(tabulate(d, headers=headers, tablefmt='plain'))
+
 
 @cli.command()
 @click.argument('image-id')

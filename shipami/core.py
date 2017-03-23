@@ -48,21 +48,23 @@ class ShipAMI(object):
             ]
         )
 
+        result = []
+        copied_keys = ['ImageId', 'Name', 'State', 'CreationDate']
+
         images = r['Images']
-        images = sorted(images, key=lambda _: _['CreationDate'], reverse=True)
-        managed_images = list(filter(lambda _: self.__is_managed(_), images))
-        unmanaged_images = list(filter(lambda _: not self.__is_managed(_), images))
+        for image in images:
+            i = {}
+            for key in copied_keys:
+                i[key] = image.get(key)
 
-        for image in managed_images:
-            image['shipami:copied_from'] = self.__get_tag(image, 'shipami:copied_from')
+            i['Managed'] = self.__is_managed(image)
+            i['Release'] = self.__get_tag(image, 'shipami:release')
+            i['CopiedFrom'] = self.__get_tag(image, 'shipami:copied_from')
+            i['CopiedTo'] = self.__get_tag(image, 'shipami:copied_to')
 
-        for image in unmanaged_images:
-            image['shipami:copied_to'] = self.__get_tag(image, 'shipami:copied_to')
+            result.append(i)
 
-        return {
-            'managed': managed_images,
-            'unmanaged': unmanaged_images
-        }
+        return result
 
     def show(self, image_id):
         ec2 = self.__get_session().client('ec2')

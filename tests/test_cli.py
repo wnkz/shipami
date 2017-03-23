@@ -2,6 +2,7 @@ from click.testing import CliRunner
 import pytest
 import os
 import json
+import time
 
 from shipami import __version__ as VERSION
 from shipami.cli import cli as shipami
@@ -37,6 +38,7 @@ def released_image(ec2, base_image):
     RELEASE = '1.0.0'
     NAME = 'foo'
 
+    time.sleep(1) # Ensure there is a CreationDate difference
     r = runner.invoke(shipami, ['release', base_image.id, RELEASE, '--name', NAME])
 
     image_id = r.output.strip()
@@ -56,16 +58,53 @@ class TestCli:
         r = runner.invoke(shipami, ['list'])
 
         assert r.exit_code == 0
-        assert '{}:\t{}'.format(base_image.id, base_image.name) in r.output
+        assert base_image.id in r.output
+        assert base_image.name in r.output
 
     def test_list(self, base_image, released_image):
         r = runner.invoke(shipami, ['list'])
 
-        print(r.output)
+        lines = r.output.splitlines()
 
         assert r.exit_code == 0
-        assert '{}:\t{} (to: eu-west-1:{})'.format(base_image.id, base_image.name, released_image.id) in r.output
-        assert '{}:\t{} [{}] (from: eu-west-1:{})'.format(released_image.id, released_image.name, released_image.state, base_image.id) in r.output
+        assert base_image.id in lines[2]
+        assert 'origin' in lines[2]
+        assert 'eu-west-1:{}'.format(released_image.id) in lines[2]
+
+        assert released_image.id in lines[1]
+        assert 'origin' not in lines[1]
+        assert 'eu-west-1:{}'.format(base_image.id) in lines[1]
+
+    def test_list_quiet(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-q'])
+
+        lines = r.output.splitlines()
+
+        assert r.exit_code == 0
+        assert len(lines) == 2
+        assert base_image.id in lines[1]
+        assert released_image.id in lines[0]
+
+    def test_list_simple_filter(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-f', 'release=1.0.0'])
+
+        lines = r.output.splitlines()
+
+        assert r.exit_code == 0
+        assert len(lines) == 2
+        assert released_image.id in lines[1]
+
+    def test_list_bad_filter(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-f', 'invalid'])
+
+        assert r.exit_code == 2
+        assert 'Invalid value' in r.output
+
+    def test_list_unknown_filter(self, base_image, released_image):
+        r = runner.invoke(shipami, ['list', '-f', 'invalid=42'])
+
+        assert r.exit_code == 2
+        assert 'Invalid value' in r.output
 
     def test_show_unmanaged(self, base_image):
         r = runner.invoke(shipami, ['show', base_image.id])
