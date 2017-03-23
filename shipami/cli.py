@@ -12,6 +12,12 @@ from shipami.core import ShipAMI
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
+state_colors = {
+    'available': 'green',
+    'pending': 'yellow',
+    'failed': 'red'
+}
+
 def validate_filter(ctx, param, filters):
     validated_filters = []
     for f in filters:
@@ -62,12 +68,6 @@ def list(shipami, filter_, quiet, color):
     for k, v in filter_:
         if k not in filters_mapping.keys():
             raise click.BadParameter('available filters are {}'.format(filters_mapping.keys()))
-
-    state_colors = {
-        'available': 'green',
-        'pending': 'yellow',
-        'failed': 'red'
-    }
 
     def makefilter(k, v, attr):
         def f(_):
@@ -124,27 +124,29 @@ def list(shipami, filter_, quiet, color):
 @click.pass_obj
 def show(shipami, image_id):
     image = shipami.show(image_id)
-    click.echo('{} ({}) [{}]'.format(image['ImageId'], image['Name'], image['State']))
+
+    click.echo('id:\t{}'.format(image.get('ImageId')))
+    click.echo('name:\t{}'.format(image.get('Name')))
+    click.echo('state:\t{}'.format(click.style(image.get('State'), fg=state_colors.get(image.get('State')))))
 
     if image.get('Tags'):
         click.echo('tags:')
-        for tag in sorted(image['Tags'], key=lambda _: _['Key'], reverse=True):
+        for tag in sorted(image['Tags'], key=lambda _: _['Key']):
             key = tag.get('Key')
             value = tag.get('Value')
-            if 'shipami:' in key:
-                color = 'blue'
-            else:
-                color = 'white'
+            color = 'blue' if 'shipami:' in key else 'white'
             click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
 
-    click.echo('devices mappings:')
-    for block_device_mapping in image['BlockDeviceMappings']:
-        click.echo('  {} {}Go type:{}'.format(
-                block_device_mapping['DeviceName'],
-                block_device_mapping['Ebs']['VolumeSize'],
-                block_device_mapping['Ebs']['VolumeType']
+    if image.get('BlockDeviceMappings'):
+        click.echo('devices mappings:')
+        for block_device_mapping in image.get('BlockDeviceMappings', []):
+            click.echo('  {} {}Go type:{}'.format(
+                    block_device_mapping['DeviceName'],
+                    block_device_mapping['Ebs']['VolumeSize'],
+                    block_device_mapping['Ebs']['VolumeType']
+                )
             )
-        )
+
     if image.get('Shares'):
         click.echo('shared with:')
         for share in image.get('Shares'):

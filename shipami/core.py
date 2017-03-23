@@ -70,21 +70,31 @@ class ShipAMI(object):
         ec2 = self.__get_session().client('ec2')
         image = self.__get_session().resource('ec2').Image(image_id)
 
-        r = ec2.describe_images(
-            Owners=[
-                'self'
-            ],
-            ImageIds=[
-                image_id
-            ]
-        )
+        try:
+            r = ec2.describe_images(
+                Owners=[
+                    'self'
+                ],
+                ImageIds=[
+                    image.id
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            logger.error(e)
+            raise click.Abort
 
-        r['Images'][0]['Shares'] = self.__get_image_permissions(image)
-        for share in r['Images'][0]['Shares']:
+        try:
+            result_image = r.get('Images', [])[0]
+        except IndexError as e:
+            logger.error(e)
+            raise click.Abort
+
+        result_image['Shares'] = self.__get_image_permissions(image)
+        for share in result_image['Shares']:
             if share.get('UserId') == self.MARKETPLACE_ACCOUNT_ID:
                 share['Marketplace'] = self.__is_ami_shared(image)
 
-        return r['Images'][0]
+        return result_image
 
     def copy(self, image_id, **kwargs):
         src_image = self.__get_session(kwargs.pop('source_region')).resource('ec2').Image(image_id)
@@ -146,12 +156,16 @@ class ShipAMI(object):
         return deleted
 
     def __copy_image(self, src_image, name=None, name_suffix=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
-        name = name or src_image.name
-        if name_suffix:
-            name = '-'.join([name, name_suffix])
-        name = self.validate_ami_name(name, clean=True)
-        description = description or src_image.description
-        src_region = src_image.meta.client.meta.region_name
+        try:
+            name = name or src_image.name
+            if name_suffix:
+                name = '-'.join([name, name_suffix])
+            name = self.validate_ami_name(name, clean=True)
+            description = description or src_image.description
+            src_region = src_image.meta.client.meta.region_name
+        except botocore.exceptions.ClientError as e:
+            logger.error(e)
+            raise click.Abort
 
         logger.debug('copying image {} from {} to {}'.format(src_image.id, src_region, self._region))
         try:

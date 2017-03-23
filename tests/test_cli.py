@@ -143,6 +143,12 @@ class TestCli:
 
         assert r.exit_code == 0
 
+    def test_show_inexistant_id(self):
+        r = runner.invoke(shipami, ['show', 'ami-42424242'])
+
+        assert r.exit_code == 1
+        assert 'Aborted!' in r.output
+
     def test_copy(self, ec2, base_image):
         image_number = len(ec2.meta.client.describe_images()['Images'])
 
@@ -208,6 +214,12 @@ class TestCli:
 
         assert r.exit_code == 0
         assert image.name == 'foo-bar'
+
+    def test_copy_inexistant_id(self, ec2, base_image):
+        r = runner.invoke(shipami, ['copy', 'ami-42424242'])
+
+        assert r.exit_code == 1
+        assert 'Aborted!' in r.output
 
     def test_release(self, ec2, base_image):
         RELEASE = '1.0.0'
