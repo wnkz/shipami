@@ -1,6 +1,5 @@
 import json
 import logging
-import click
 import boto3
 import botocore
 import time
@@ -33,25 +32,29 @@ class ShipAMI(object):
         allowed = ['(', ')', '[', ']', ' ', '.', '/', '-', '\'', '@', '_']
 
         if len(name) < 3 or len(name) > 128:
-            raise click.BadParameter('AMI Name must be 3-128 long (got: "{}")'.format(name))
+            raise RuntimeError('AMI Name must be 3-128 long (got: "{}")'.format(name))
 
         if clean:
             return ''.join(map(lambda _: _ if _.isalnum() or _ in allowed else '-', name))
         return name
 
     def list(self):
-        ec2 = self.__get_session().client('ec2')
-
-        r = ec2.describe_images(
-            Owners=[
-                'self'
-            ]
-        )
-
         result = []
         copied_keys = ['ImageId', 'Name', 'State', 'CreationDate']
+        ec2 = self.__get_session().client('ec2')
 
-        images = r['Images']
+        try:
+            r = ec2.describe_images(
+                Owners=[
+                    'self'
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
+
+        images = r.get('Images', [])
         for image in images:
             i = {}
             for key in copied_keys:
@@ -80,14 +83,16 @@ class ShipAMI(object):
                 ]
             )
         except botocore.exceptions.ClientError as e:
-            logger.error(e)
-            raise click.Abort
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
         try:
             result_image = r.get('Images', [])[0]
-        except IndexError as e:
-            logger.error(e)
-            raise click.Abort
+        except IndexError:
+            message = 'Something went wrong'
+            logger.error(message)
+            raise RuntimeError(message)
 
         result_image['Shares'] = self.__get_image_permissions(image)
         for share in result_image['Shares']:
@@ -130,8 +135,9 @@ class ShipAMI(object):
             managed = self.__is_managed(image)
             if not managed:
                 if not force:
-                    logger.error('AMI [{}] is not managed by shipami'.format(image.id))
-                    raise click.Abort
+                    message = 'AMI [{}] is not managed by shipami'.format(image.id)
+                    logger.error(message)
+                    raise RuntimeError(message)
             else:
                 copied_from = self.__get_tag(image, 'shipami:copied_from')
                 if copied_from:
@@ -146,8 +152,9 @@ class ShipAMI(object):
                     logger.debug('deleting {}'.format(snapshot.id))
                     snapshot.delete()
             except botocore.exceptions.ClientError as e:
-                logger.error(e)
-                raise click.Abort
+                message = e.response['Error']['Message']
+                logger.error(message)
+                raise RuntimeError(message)
 
             if managed and copied_from:
                 self.__remove_copied_to(from_image, remove_copied_to)
@@ -164,11 +171,12 @@ class ShipAMI(object):
             description = description or src_image.description
             src_region = src_image.meta.client.meta.region_name
         except botocore.exceptions.ClientError as e:
-            logger.error(e)
-            raise click.Abort
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
-        logger.debug('copying image {} from {} to {}'.format(src_image.id, src_region, self._region))
         try:
+            logger.debug('copying image {} from {} to {}'.format(src_image.id, src_region, self._region))
             r = self.__get_session().client('ec2').copy_image(
                 SourceRegion=src_region,
                 SourceImageId=src_image.id,
@@ -176,8 +184,9 @@ class ShipAMI(object):
                 Description=description
             )
         except botocore.exceptions.ClientError as e:
-            logger.error(e)
-            raise click.Abort
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
         dst_image = self.__get_session().resource('ec2').Image(r['ImageId'])
         self.__append_tag(src_image, 'shipami:copied_to', '{}:{}'.format(self._region, dst_image.id))
@@ -208,16 +217,25 @@ class ShipAMI(object):
                 snapshot.create_tags(Tags=src_image.tags)
 
     def __share_modify_attribute(self, obj, attribute, operation, account_id):
-        obj.modify_attribute(
-            Attribute=attribute,
-            OperationType=operation,
-            UserIds=[
-                account_id
-            ]
-        )
+        try:
+            obj.modify_attribute(
+                Attribute=attribute,
+                OperationType=operation,
+                UserIds=[
+                    account_id
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
     def __get_copied_from_image(self, copied_from):
-        region, image_id = copied_from.split(':')
+        try:
+            region, image_id = copied_from.split(':')
+        except ValueError as e:
+            logger.error(e)
+            raise RuntimeError(e)
         image = self.__get_session(region).resource('ec2').Image(image_id)
         return image
 
@@ -268,7 +286,7 @@ class ShipAMI(object):
     def __get_tag(self, obj, key):
         try:
             tags = obj.tags or []
-        except AttributeError:
+        except (botocore.exceptions.ClientError, AttributeError):
             try:
                 tags = obj.get('Tags', [])
             except AttributeError:
@@ -280,26 +298,36 @@ class ShipAMI(object):
         return None
 
     def __set_tag(self, obj, key, value):
-        obj.create_tags(
-            Tags=[
-                {
-                    'Key': key,
-                    'Value': value
-                }
-            ]
-        )
+        try:
+            obj.create_tags(
+                Tags=[
+                    {
+                        'Key': key,
+                        'Value': value
+                    }
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
     def __delete_tag(self, obj, key):
-        obj.meta.client.delete_tags(
-            Resources=[
-                obj.id
-            ],
-            Tags=[
-                {
-                    'Key': key
-                }
-            ]
-        )
+        try:
+            obj.meta.client.delete_tags(
+                Resources=[
+                    obj.id
+                ],
+                Tags=[
+                    {
+                        'Key': key
+                    }
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
     def __is_managed(self, image):
         if self.__get_tag(image, 'shipami:managed') == 'True':
@@ -307,18 +335,28 @@ class ShipAMI(object):
         return False
 
     def __get_image_permissions(self, image):
-        r = image.describe_attribute(
-            Attribute='launchPermission'
-        )
+        try:
+            r = image.describe_attribute(
+                Attribute='launchPermission'
+            )
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
-        return r['LaunchPermissions']
+        return r.get('LaunchPermissions', [])
 
     def __get_snapshot_permissions(self, snapshot):
-        r = snapshot.describe_attribute(
-            Attribute='createVolumePermission'
-        )
+        try:
+            r = snapshot.describe_attribute(
+                Attribute='createVolumePermission'
+            )
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            logger.error(message)
+            raise RuntimeError(message)
 
-        return r['CreateVolumePermissions']
+        return r.get('CreateVolumePermissions', [])
 
     def __is_ami_shared(self, image, account_id=None):
         account_id = account_id or self.MARKETPLACE_ACCOUNT_ID

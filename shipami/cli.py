@@ -81,7 +81,10 @@ def list(shipami, filter_, quiet, color):
         return f
 
     now = datetime.datetime.utcnow()
-    images = shipami.list()
+    try:
+        images = shipami.list()
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
     for k, v in filter_:
         attr = headers_mapping.get(filters_mapping.get(k))
@@ -123,7 +126,10 @@ def list(shipami, filter_, quiet, color):
 @click.argument('image-id')
 @click.pass_obj
 def show(shipami, image_id):
-    image = shipami.show(image_id)
+    try:
+        image = shipami.show(image_id)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
     click.echo('id:\t{}'.format(image.get('ImageId')))
     click.echo('name:\t{}'.format(image.get('Name')))
@@ -171,7 +177,11 @@ def show(shipami, image_id):
 @click.option('--wait/--no-wait', default=False)
 @click.pass_obj
 def copy(shipami, **kwargs):
-    image_id = shipami.copy(kwargs.pop('image_id'), **kwargs)
+    try:
+        image_id = shipami.copy(kwargs.pop('image_id'), **kwargs)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
     click.echo(image_id)
 
 
@@ -187,7 +197,11 @@ def copy(shipami, **kwargs):
 @click.option('--wait/--no-wait', default=False)
 @click.pass_obj
 def release(shipami, **kwargs):
-    image_id = shipami.release(kwargs.pop('image_id'), kwargs.pop('release'), **kwargs)
+    try:
+        image_id = shipami.release(kwargs.pop('image_id'), kwargs.pop('release'), **kwargs)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
     click.echo(image_id)
 
 
@@ -197,7 +211,10 @@ def release(shipami, **kwargs):
 @click.option('--remove', is_flag=True, default=False)
 @click.pass_obj
 def share(shipami, **kwargs):
-    shipami.share(kwargs.pop('image_id'), **kwargs)
+    try:
+        shipami.share(kwargs.pop('image_id'), **kwargs)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
 
 @cli.command()
@@ -205,5 +222,10 @@ def share(shipami, **kwargs):
 @click.option('--force', '-f', is_flag=True, default=False)
 @click.pass_obj
 def delete(shipami, image_id, force):
-    for deleted in shipami.delete(image_id, force):
-        click.echo(deleted)
+    try:
+        deleted = shipami.delete(image_id, force)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+    for d in deleted:
+        click.echo(d)
