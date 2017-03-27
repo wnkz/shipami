@@ -12,6 +12,12 @@ from shipami.core import ShipAMI
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
+state_colors = {
+    'available': 'green',
+    'pending': 'yellow',
+    'failed': 'red'
+}
+
 def validate_filter(ctx, param, filters):
     validated_filters = []
     for f in filters:
@@ -63,12 +69,6 @@ def list(shipami, filter_, quiet, color):
         if k not in filters_mapping.keys():
             raise click.BadParameter('available filters are {}'.format(filters_mapping.keys()))
 
-    state_colors = {
-        'available': 'green',
-        'pending': 'yellow',
-        'failed': 'red'
-    }
-
     def makefilter(k, v, attr):
         def f(_):
             x = _.get(attr)
@@ -81,7 +81,10 @@ def list(shipami, filter_, quiet, color):
         return f
 
     now = datetime.datetime.utcnow()
-    images = shipami.list()
+    try:
+        images = shipami.list()
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
     for k, v in filter_:
         attr = headers_mapping.get(filters_mapping.get(k))
@@ -123,28 +126,33 @@ def list(shipami, filter_, quiet, color):
 @click.argument('image-id')
 @click.pass_obj
 def show(shipami, image_id):
-    image = shipami.show(image_id)
-    click.echo('{} ({}) [{}]'.format(image['ImageId'], image['Name'], image['State']))
+    try:
+        image = shipami.show(image_id)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+    click.echo('id:\t{}'.format(image.get('ImageId')))
+    click.echo('name:\t{}'.format(image.get('Name')))
+    click.echo('state:\t{}'.format(click.style(image.get('State'), fg=state_colors.get(image.get('State')))))
 
     if image.get('Tags'):
         click.echo('tags:')
-        for tag in sorted(image['Tags'], key=lambda _: _['Key'], reverse=True):
+        for tag in sorted(image['Tags'], key=lambda _: _['Key']):
             key = tag.get('Key')
             value = tag.get('Value')
-            if 'shipami:' in key:
-                color = 'blue'
-            else:
-                color = 'white'
+            color = 'blue' if 'shipami:' in key else 'white'
             click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
 
-    click.echo('devices mappings:')
-    for block_device_mapping in image['BlockDeviceMappings']:
-        click.echo('  {} {}Go type:{}'.format(
-                block_device_mapping['DeviceName'],
-                block_device_mapping['Ebs']['VolumeSize'],
-                block_device_mapping['Ebs']['VolumeType']
+    if image.get('BlockDeviceMappings'):
+        click.echo('devices mappings:')
+        for block_device_mapping in image.get('BlockDeviceMappings', []):
+            click.echo('  {} {}Go type:{}'.format(
+                    block_device_mapping['DeviceName'],
+                    block_device_mapping['Ebs']['VolumeSize'],
+                    block_device_mapping['Ebs']['VolumeType']
+                )
             )
-        )
+
     if image.get('Shares'):
         click.echo('shared with:')
         for share in image.get('Shares'):
@@ -169,7 +177,11 @@ def show(shipami, image_id):
 @click.option('--wait/--no-wait', default=False)
 @click.pass_obj
 def copy(shipami, **kwargs):
-    image_id = shipami.copy(kwargs.pop('image_id'), **kwargs)
+    try:
+        image_id = shipami.copy(kwargs.pop('image_id'), **kwargs)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
     click.echo(image_id)
 
 
@@ -185,7 +197,11 @@ def copy(shipami, **kwargs):
 @click.option('--wait/--no-wait', default=False)
 @click.pass_obj
 def release(shipami, **kwargs):
-    image_id = shipami.release(kwargs.pop('image_id'), kwargs.pop('release'), **kwargs)
+    try:
+        image_id = shipami.release(kwargs.pop('image_id'), kwargs.pop('release'), **kwargs)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
     click.echo(image_id)
 
 
@@ -195,7 +211,10 @@ def release(shipami, **kwargs):
 @click.option('--remove', is_flag=True, default=False)
 @click.pass_obj
 def share(shipami, **kwargs):
-    shipami.share(kwargs.pop('image_id'), **kwargs)
+    try:
+        shipami.share(kwargs.pop('image_id'), **kwargs)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
 
 @cli.command()
@@ -203,5 +222,10 @@ def share(shipami, **kwargs):
 @click.option('--force', '-f', is_flag=True, default=False)
 @click.pass_obj
 def delete(shipami, image_id, force):
-    for deleted in shipami.delete(image_id, force):
-        click.echo(deleted)
+    try:
+        deleted = shipami.delete(image_id, force)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+    for d in deleted:
+        click.echo(d)

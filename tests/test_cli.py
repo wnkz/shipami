@@ -143,6 +143,12 @@ class TestCli:
 
         assert r.exit_code == 0
 
+    def test_show_inexistant_id(self):
+        r = runner.invoke(shipami, ['show', 'ami-42424242'])
+
+        assert r.exit_code == 1
+        assert 'Error: The image id \'[ami-42424242]\' does not exist' in r.output
+
     def test_copy(self, ec2, base_image):
         image_number = len(ec2.meta.client.describe_images()['Images'])
 
@@ -196,7 +202,7 @@ class TestCli:
 
         r = runner.invoke(shipami, ['copy', base_image.id, '--name', NAME])
 
-        assert 'Invalid value' in r.output
+        assert 'Error:' in r.output
 
     def test_copy_cleanup_name(self, ec2, base_image):
         NAME = 'foo#bar'
@@ -208,6 +214,12 @@ class TestCli:
 
         assert r.exit_code == 0
         assert image.name == 'foo-bar'
+
+    def test_copy_inexistant_id(self, ec2, base_image):
+        r = runner.invoke(shipami, ['copy', 'ami-42424242'])
+
+        assert r.exit_code == 1
+        assert 'Error: The image id \'[ami-42424242]\' does not exist' in r.output
 
     def test_release(self, ec2, base_image):
         RELEASE = '1.0.0'
@@ -254,7 +266,7 @@ class TestCli:
         r = runner.invoke(shipami, ['delete', base_image_id])
 
         assert r.exit_code == 1
-        assert 'Aborted!' in r.output
+        assert 'Error: AMI [{}] is not managed by shipami'.format(base_image_id) in r.output
 
     def test_delete_force(self, ec2, base_image):
         base_image_id = base_image.id
