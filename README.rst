@@ -33,8 +33,18 @@ Install with ``pip``:
     $ pip install shipami
     $ shipami --help
 
-Publish AMI for AWS Marketplace
--------------------------------
+Example: Publish AMI for AWS Marketplace
+----------------------------------------
+
+1. List available AMIs in your default region (eg. eu-west-1)
+
+.. code-block:: sh
+
+  $ shipami list
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo                   ami-00000000  available  5 days ago   no         origin
+
+2. Create a release based on this image in us-east-1 region
 
 .. code-block:: sh
 
@@ -42,27 +52,23 @@ Publish AMI for AWS Marketplace
   ami-000000aa
 
   $ shipami --region us-east-1 list
-  Managed images:
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo-1.0    1.0        ami-000000aa  pending    just now     yes        eu-west-1:ami-00000000
 
-    ami-000000aa: foo-1.0 [pending] (from: eu-west-1:ami-00000000)
+3. Manually share with AWS Marketplace account
 
-  $ shipami --region us-east-1 show ami-000000aa
-  ami-000000aa (foo-1.0) [pending]
-  tags:
-    shipami:release: 1.0
-    shipami:managed: True
-    shipami:copied_from: eu-west-1:ami-00000000
-  devices mappings:
-    /dev/xvda 8Go type:gp2
+.. code-block:: sh
 
   $ shipami --region us-east-1 share ami-000000aa
 
   $ shipami --region us-east-1 show ami-000000aa
-  ami-000000aa (foo-1.0) [available]
+  id:     ami-000000aa
+  name:   foo-1.0
+  state:  available
   tags:
-    shipami:release: 1.0
-    shipami:managed: True
     shipami:copied_from: eu-west-1:ami-00000000
+    shipami:managed: True
+    shipami:release: 1.0
   devices mappings:
     /dev/xvda 8Go type:gp2
   shared with:
@@ -71,12 +77,7 @@ Publish AMI for AWS Marketplace
 Commands
 ========
 
-.. note::
-
-   In the examples, we consider you have the following:
-    - AWS credentials correctly configured and sufficient permissions
-    - A base AMI with the ID ``ami-00000000`` and NAME ``foo``
-
+You can get further help and usage instructions on any command with the ``--help`` option.
 
 ``copy``
 --------
@@ -86,17 +87,27 @@ Commands
   $ shipami copy ami-00000000
   ami-000000aa
   $ shipami list
-  Managed images:
-
-    ami-000000aa: foo [pending] (from: eu-west-1:ami-00000000)
-
-  Unmanaged images:
-
-    ami-00000000: foo (to: eu-west-1:ami-000000aa)
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo                   ami-00000000  available  5 days ago   no         origin                  eu-west-1:ami-000000aa
+  foo                   ami-000000aa  pending    just now     yes        eu-west-1:ami-00000000
 
 
 ``delete``
 ----------
+
+.. code-block:: sh
+
+  $ shipami list
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo                   ami-00000000  available  5 days ago   no         origin                  eu-west-1:ami-000000aa
+  foo                   ami-000000aa  available  1 day ago    yes        eu-west-1:ami-00000000
+
+  $ shipami delete ami-000000aa
+  ami-000000aa
+
+  $ shipami list
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo                   ami-00000000  available  5 days ago   no         origin
 
 
 ``list``
@@ -105,9 +116,8 @@ Commands
 .. code-block:: sh
 
   $ shipami list
-  Unmanaged images:
-
-  	ami-00000000:	foo
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo                   ami-00000000  available  5 days ago   no         origin
 
 
 ``release``
@@ -118,18 +128,33 @@ Commands
   $ shipami release ami-00000000 1.0
   ami-000000aa
   $ shipami list
-  Managed images:
-
-    ami-000000aa: foo-1.0 [pending] (from: eu-west-1:ami-00000000)
-
-  Unmanaged images:
-
-    ami-00000000: foo (to: eu-west-1:ami-000000aa)
+  NAME       RELEASE    ID            STATE      CREATED      MANAGED    COPIED FROM             COPIED TO
+  foo                   ami-00000000  available  5 days ago   no         origin                  eu-west-1:ami-000000aa
+  foo-1.0    1.0        ami-000000aa  pending    just now     yes        eu-west-1:ami-00000000
 
 
 ``share``
 ---------
 
+.. code-block:: sh
+
+  $ shipami share ami-000000aa 012345678912
+
 
 ``show``
 --------
+
+.. code-block:: sh
+
+  $ shipami show ami-000000aa
+  id:     ami-000000aa
+  name:   foo-1.0
+  state:  available
+  tags:
+    shipami:copied_from: eu-west-1:ami-00000000
+    shipami:managed: True
+    shipami:release: 1.0
+  devices mappings:
+    /dev/xvda 8Go type:gp2
+  shared with:
+    012345678912
