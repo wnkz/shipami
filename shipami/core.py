@@ -133,12 +133,14 @@ class ShipAMI(object):
             image = ec2.Image(image_id)
 
             managed = self.__is_managed(image)
-            if not managed:
-                if not force:
-                    message = 'AMI [{}] is not managed by shipami'.format(image.id)
-                    logger.error(message)
-                    raise RuntimeError(message)
-            else:
+            release = self.__is_release(image)
+
+            if (not managed or release) and (not force):
+                message = '{} is either a release or not managed by shipami, you must use -f to delete this image'.format(image.id)
+                raise RuntimeError(message)
+
+            copied_from = None
+            if managed:
                 copied_from = self.__get_tag(image, 'shipami:copied_from')
                 if copied_from:
                     from_image = self.__get_copied_from_image(copied_from)
@@ -333,6 +335,9 @@ class ShipAMI(object):
         if self.__get_tag(image, 'shipami:managed') == 'True':
             return True
         return False
+
+    def __is_release(self, image):
+        return True if self.__get_tag(image, 'shipami:release') else False
 
     def __get_image_permissions(self, image):
         try:

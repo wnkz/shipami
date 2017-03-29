@@ -34,6 +34,15 @@ def base_image(ec2):
     return image
 
 @pytest.fixture()
+def copied_image(ec2, base_image):
+    time.sleep(1) # Ensure there is a CreationDate difference
+    r = runner.invoke(shipami, ['copy', base_image.id])
+
+    image_id = r.output.strip()
+    image = ec2.Image(image_id)
+    return image
+
+@pytest.fixture()
 def released_image(ec2, base_image):
     RELEASE = '1.0.0'
     NAME = 'foo'
@@ -251,22 +260,31 @@ class TestCli:
         assert image.name == '{}-{}'.format(NAME, RELEASE)
         assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])
 
-    def test_delete(self, ec2, released_image):
-        released_image_id = released_image.id
-        r = runner.invoke(shipami, ['delete', released_image_id])
+    def test_delete(self, ec2, copied_image):
+        copied_image_id = copied_image.id
+        r = runner.invoke(shipami, ['delete', copied_image_id])
 
         returned_image_id = r.output.strip()
 
         assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == 1
-        assert returned_image_id == released_image_id
+        assert returned_image_id == copied_image_id
 
-    def test_delete_error(self, base_image):
+    def test_delete_not_managed(self, ec2, base_image):
         base_image_id = base_image.id
         r = runner.invoke(shipami, ['delete', base_image_id])
 
         assert r.exit_code == 1
-        assert 'Error: AMI [{}] is not managed by shipami'.format(base_image_id) in r.output
+        assert len(ec2.meta.client.describe_images()['Images']) == 1
+        assert 'Error: {} is either a release or not managed by shipami'.format(base_image_id) in r.output
+
+    def test_delete_released_image(self, ec2, released_image):
+        released_image_id = released_image.id
+        r = runner.invoke(shipami, ['delete', released_image_id])
+
+        assert r.exit_code == 1
+        assert len(ec2.meta.client.describe_images()['Images']) == 2
+        assert 'Error: {} is either a release or not managed by shipami'.format(released_image_id) in r.output
 
     def test_delete_force(self, ec2, base_image):
         base_image_id = base_image.id
@@ -277,3 +295,13 @@ class TestCli:
         assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == 0
         assert returned_image_id == base_image_id
+
+    def test_delete_force_released(self, ec2, released_image):
+        released_image_id = released_image.id
+        r = runner.invoke(shipami, ['delete', '--force', released_image_id])
+
+        returned_image_id = r.output.strip()
+
+        assert r.exit_code == 0
+        assert len(ec2.meta.client.describe_images()['Images']) == 1
+        assert returned_image_id == released_image_id
