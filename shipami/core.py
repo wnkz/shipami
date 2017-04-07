@@ -245,20 +245,25 @@ class ShipAMI(object):
         return '{}:{}'.format(self.__get_image_region(image), image.id)
 
     def __remove_copied_to(self, image, to_remove):
-        copied_to = self.__get_tag(image, 'shipami:copied_to')
-        logger.debug('removing "{}" from {} shipami:copied_to tag'.format(to_remove, image.id))
-        logger.debug('shipami:copied_to: {}'.format(copied_to))
+        try:
+            copied_to = self.__get_tag(image, 'shipami:copied_to')
 
-        copied_to = copied_to.split(',')
-        copied_to = filter(lambda _: _ != to_remove, copied_to)
-        copied_to = ','.join(copied_to)
+            logger.debug('removing "{}" from {} shipami:copied_to tag'.format(to_remove, image.id))
+            logger.debug('shipami:copied_to: {}'.format(copied_to))
 
-        if copied_to:
-            logger.debug('set shipami:copied_to: {}'.format(copied_to))
-            self.__set_tag(image, 'shipami:copied_to', copied_to)
-        else:
-            logger.debug('removed shipami:copied_to')
-            self.__delete_tag(image, 'shipami:copied_to')
+            if copied_to:
+                copied_to = copied_to.split(',')
+                copied_to = filter(lambda _: _ != to_remove, copied_to)
+                copied_to = ','.join(copied_to)
+
+                if copied_to:
+                    logger.debug('set shipami:copied_to: {}'.format(copied_to))
+                    self.__set_tag(image, 'shipami:copied_to', copied_to)
+                else:
+                    logger.debug('removed shipami:copied_to')
+                    self.__delete_tag(image, 'shipami:copied_to')
+        except RuntimeError as e:
+            logger.debug(str(e))
 
     def __get_image_region(self, image):
         return image.meta.client.meta.region_name
@@ -288,11 +293,14 @@ class ShipAMI(object):
     def __get_tag(self, obj, key):
         try:
             tags = obj.tags or []
-        except (botocore.exceptions.ClientError, AttributeError):
+        except AttributeError:
             try:
                 tags = obj.get('Tags', [])
             except AttributeError:
                 return None
+        except botocore.exceptions.ClientError as e:
+            message = e.response['Error']['Message']
+            raise RuntimeError(message)
 
         for tag in tags:
             if tag.get('Key') == key:
