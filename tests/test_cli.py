@@ -43,6 +43,12 @@ def copied_image(ec2, base_image):
     return image
 
 @pytest.fixture()
+def deleted_copied_image(ec2, base_image, copied_image):
+    r = runner.invoke(shipami, ['delete', '-f', base_image.id])
+
+    return copied_image
+
+@pytest.fixture()
 def released_image(ec2, base_image):
     RELEASE = '1.0.0'
     NAME = 'foo'
@@ -53,7 +59,6 @@ def released_image(ec2, base_image):
     image_id = r.output.strip()
     image = ec2.Image(image_id)
     return image
-
 
 class TestCli:
 
@@ -305,3 +310,15 @@ class TestCli:
         assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == 1
         assert returned_image_id == released_image_id
+
+    def test_delete_deleted_source(self, ec2, deleted_copied_image):
+        deleted_copied_image_id = deleted_copied_image.id
+        r = runner.invoke(shipami, ['delete', deleted_copied_image_id])
+
+        print(r.output)
+
+        returned_image_id = r.output.strip()
+
+        assert r.exit_code == 0
+        assert len(ec2.meta.client.describe_images()['Images']) == 0
+        assert returned_image_id == deleted_copied_image_id
