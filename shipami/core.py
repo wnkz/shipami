@@ -202,9 +202,34 @@ class ShipAMI(object):
         self.__set_managed(dst_image)
         self.__set_tag(dst_image, 'shipami:copied_from', '{}:{}'.format(src_region, src_image.id))
 
-        # TODO: implement copy_permissions
+        if copy_permissions:
+            try:
+                self.__wait_for_image(dst_image)
+                for permission in self.__get_image_permissions(src_image):
+                    account_id = permission.get('UserId')
+                    logger.debug('adding launchPermission permission for {} on image {}'.format(account_id, dst_image.id))
+                    self.__share_modify_attribute(dst_image, 'launchPermission', 'add', account_id)
 
-        if wait:
+                src_block_devices = self.__get_image_block_devices(src_image)
+                for dst_block_device in self.__get_image_block_devices(dst_image):
+                    dst_snapshot = dst_block_device.get('Snapshot')
+                    self.__wait_for_snapshot(dst_snapshot)
+                    for src_block_device in src_block_devices:
+                        if src_block_device.get('DeviceName') == dst_block_device.get('DeviceName'):
+                            src_snapshot = src_block_device.get('Snapshot')
+                            logger.debug('found matching DeviceName for {} and {}'.format(src_snapshot.id, dst_snapshot.id))
+                            for permission in self.__get_snapshot_permissions(src_snapshot):
+                                account_id = permission.get('UserId')
+                                if account_id == 'aws-marketplace':
+                                    account_id = self.MARKETPLACE_ACCOUNT_ID
+                                logger.debug('adding createVolumePermission permission for {} on snapshot {}'.format(account_id, dst_snapshot.id))
+                                self.__share_modify_attribute(dst_snapshot, 'createVolumePermission', 'add', account_id)
+            except botocore.exceptions.ClientError as e:
+                message = e.response['Error']['Message']
+                logger.error(message)
+                raise RuntimeError(message)
+
+        if wait and not copy_permissions:
             self.__wait_for_image(dst_image)
 
         return dst_image
@@ -279,6 +304,18 @@ class ShipAMI(object):
             if block_device_mapping.get('Ebs'):
                 snapshots.append(ec2.Snapshot(block_device_mapping['Ebs']['SnapshotId']))
         return snapshots
+
+    def __get_image_block_devices(self, image):
+        region_name = self.__get_image_region(image)
+        ec2 = self.__get_session(region_name).resource('ec2')
+        block_devices = []
+
+        # We must wait for the image to be avaiale in order to get the SnapshotIds
+        self.__wait_for_image(image)
+        for block_device_mapping in image.block_device_mappings:
+            if block_device_mapping.get('Ebs'):
+                block_devices.append({'DeviceName': block_device_mapping.get('DeviceName'), 'Snapshot': ec2.Snapshot(block_device_mapping['Ebs']['SnapshotId'])})
+        return block_devices
 
     def __set_managed(self, image):
         self.__set_tag(image, 'shipami:managed', 'True')
