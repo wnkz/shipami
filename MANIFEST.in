@@ -4,6 +4,7 @@ exclude .travis.yml
 include README.rst
 include LICENSE
 include setup.cfg
+include shipami-complete.sh
 prune .cache
 prune .git
 prune build
