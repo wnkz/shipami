@@ -54,6 +54,12 @@ setup(
     keywords='aws ec2 ami marketplace',
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
+    package_data={
+        'codebuilder': [
+            'shipami-complete.sh'
+        ]
+    },
+    include_package_data=True,
 
     install_requires=[
         'click==6.7',

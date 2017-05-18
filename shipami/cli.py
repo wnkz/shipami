@@ -28,7 +28,23 @@ def validate_filter(ctx, param, filters):
             raise click.BadParameter('filter must be in format "key=value"')
     return tuple(validated_filters)
 
-@click.group()
+class AliasedGroup(click.Group):
+    ALIASES = {
+        'ls': 'list',
+        'cp': 'copy',
+        'rm': 'delete'
+    }
+
+    def get_command(self, ctx, cmd_name):
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv is not None:
+            return rv
+
+        if self.ALIASES.get(cmd_name, None):
+            return click.Group.get_command(self, ctx, self.ALIASES[cmd_name])
+        return None
+
+@click.group(cls=AliasedGroup)
 @click.version_option(VERSION)
 @click.option('--region')
 @click.option('-v', '--verbose', is_flag=True, default=False)
