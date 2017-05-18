@@ -171,6 +171,11 @@ class TestCli:
 
         assert r.exit_code == 0
 
+    def test_show_multiple(self, base_image, released_image):
+        r = runner.invoke(shipami, ['show', base_image.id, released_image.id])
+
+        assert r.exit_code == 0
+
     def test_show_inexistant_id(self):
         r = runner.invoke(shipami, ['show', 'ami-42424242'])
 
