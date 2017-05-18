@@ -69,37 +69,41 @@ class ShipAMI(object):
 
         return result
 
-    def show(self, image_id):
-        ec2 = self.__get_session().client('ec2')
-        image = self.__get_session().resource('ec2').Image(image_id)
+    def show(self, image_ids):
+        result_images = []
+        for image_id in image_ids:
+            ec2 = self.__get_session().client('ec2')
+            image = self.__get_session().resource('ec2').Image(image_id)
 
-        try:
-            r = ec2.describe_images(
-                Owners=[
-                    'self'
-                ],
-                ImageIds=[
-                    image.id
-                ]
-            )
-        except botocore.exceptions.ClientError as e:
-            message = e.response['Error']['Message']
-            logger.error(message)
-            raise RuntimeError(message)
+            try:
+                r = ec2.describe_images(
+                    Owners=[
+                        'self'
+                    ],
+                    ImageIds=[
+                        image.id
+                    ]
+                )
+            except botocore.exceptions.ClientError as e:
+                message = e.response['Error']['Message']
+                logger.error(message)
+                raise RuntimeError(message)
 
-        try:
-            result_image = r.get('Images', [])[0]
-        except IndexError:
-            message = 'Something went wrong'
-            logger.error(message)
-            raise RuntimeError(message)
+            try:
+                result_image = r.get('Images', [])[0]
+            except IndexError:
+                message = 'Something went wrong'
+                logger.error(message)
+                raise RuntimeError(message)
 
-        result_image['Shares'] = self.__get_image_permissions(image)
-        for share in result_image['Shares']:
-            if share.get('UserId') == self.MARKETPLACE_ACCOUNT_ID:
-                share['Marketplace'] = self.__is_ami_shared(image)
+            result_image['Shares'] = self.__get_image_permissions(image)
+            for share in result_image['Shares']:
+                if share.get('UserId') == self.MARKETPLACE_ACCOUNT_ID:
+                    share['Marketplace'] = self.__is_ami_shared(image)
 
-        return result_image
+            result_images.append(result_image)
+
+        return result_images
 
     def copy(self, image_id, **kwargs):
         src_image = self.__get_session(kwargs.pop('source_region')).resource('ec2').Image(image_id)

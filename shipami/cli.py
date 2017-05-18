@@ -139,46 +139,50 @@ def list(shipami, filter_, quiet, color):
 
 
 @cli.command()
-@click.argument('image-id')
+@click.argument('image-id', nargs=-1)
 @click.pass_obj
 def show(shipami, image_id):
     try:
-        image = shipami.show(image_id)
+        images = shipami.show(image_id)
     except RuntimeError as e:
         raise click.ClickException(str(e))
 
-    click.echo('id:\t{}'.format(image.get('ImageId')))
-    click.echo('name:\t{}'.format(image.get('Name')))
-    click.echo('state:\t{}'.format(click.style(image.get('State'), fg=state_colors.get(image.get('State')))))
+    for i, image in enumerate(images):
+        click.echo('id:\t{}'.format(image.get('ImageId')))
+        click.echo('name:\t{}'.format(image.get('Name')))
+        click.echo('state:\t{}'.format(click.style(image.get('State'), fg=state_colors.get(image.get('State')))))
 
-    if image.get('Tags'):
-        click.echo('tags:')
-        for tag in sorted(image['Tags'], key=lambda _: _['Key']):
-            key = tag.get('Key')
-            value = tag.get('Value')
-            color = 'blue' if 'shipami:' in key else 'white'
-            click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
+        if image.get('Tags'):
+            click.echo('tags:')
+            for tag in sorted(image['Tags'], key=lambda _: _['Key']):
+                key = tag.get('Key')
+                value = tag.get('Value')
+                color = 'blue' if 'shipami:' in key else 'white'
+                click.echo('  {}: {}'.format(key, click.style(value, fg=color, bold=True)))
 
-    if image.get('BlockDeviceMappings'):
-        click.echo('devices mappings:')
-        for block_device_mapping in image.get('BlockDeviceMappings', []):
-            click.echo('  {} {}Go type:{}'.format(
-                    block_device_mapping['DeviceName'],
-                    block_device_mapping['Ebs']['VolumeSize'],
-                    block_device_mapping['Ebs']['VolumeType']
+        if image.get('BlockDeviceMappings'):
+            click.echo('devices mappings:')
+            for block_device_mapping in image.get('BlockDeviceMappings', []):
+                click.echo('  {} {}Go type:{}'.format(
+                        block_device_mapping['DeviceName'],
+                        block_device_mapping['Ebs']['VolumeSize'],
+                        block_device_mapping['Ebs']['VolumeType']
+                    )
                 )
-            )
 
-    if image.get('Shares'):
-        click.echo('shared with:')
-        for share in image.get('Shares'):
-            click.echo('  {}'.format(share['UserId']), nl=False)
-            if share.get('Marketplace') is not None:
-                click.echo(' (AWS MARKETPLACE)', nl=False)
-                if share.get('Marketplace') is True:
-                    click.secho(' OK', fg='green', nl=False)
-                else:
-                    click.secho(' PARTIAL', fg='yellow', nl=False)
+        if image.get('Shares'):
+            click.echo('shared with:')
+            for share in image.get('Shares'):
+                click.echo('  {}'.format(share['UserId']), nl=False)
+                if share.get('Marketplace') is not None:
+                    click.echo(' (AWS MARKETPLACE)', nl=False)
+                    if share.get('Marketplace') is True:
+                        click.secho(' OK', fg='green', nl=False)
+                    else:
+                        click.secho(' PARTIAL', fg='yellow', nl=False)
+                click.echo()
+
+        if i < len(images) - 1:
             click.echo()
 
 
