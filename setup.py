@@ -63,7 +63,6 @@ setup(
 
     install_requires=[
         'click==6.7',
-        'botocore>=1.5.0,<1.6.0',
         'boto3>=1.4.4',
         'tabulate>=0.7.7',
         'timeago>=1.0.7'
