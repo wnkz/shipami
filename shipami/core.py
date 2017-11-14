@@ -306,7 +306,10 @@ class ShipAMI(object):
         self.__wait_for_image(image)
         for block_device_mapping in image.block_device_mappings:
             if block_device_mapping.get('Ebs'):
-                snapshots.append(ec2.Snapshot(block_device_mapping['Ebs']['SnapshotId']))
+                try:
+                    snapshots.append(ec2.Snapshot(block_device_mapping['Ebs']['SnapshotId']))
+                except KeyError:
+                    pass
         return snapshots
 
     def __get_image_block_devices(self, image):
