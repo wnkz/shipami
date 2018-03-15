@@ -305,7 +305,7 @@ class TestCli:
 
         assert r.exit_code == 0
         assert len(ec2.meta.client.describe_images()['Images']) == image_number + 1
-        assert image.name == '{}-{}'.format(NAME, RELEASE)
+        assert image.name == NAME
         assert sorted(image.tags, key=lambda _: _['Key']) == sorted(expected_tags, key=lambda _: _['Key'])
 
     def test_delete(self, ec2, copied_image):
