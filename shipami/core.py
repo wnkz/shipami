@@ -39,23 +39,31 @@ class ShipAMI(object):
             return ''.join(map(lambda _: _ if _.isalnum() or _ in allowed else '-', name))
         return name
 
-    def list(self):
+    def list(self, include_executable_images=False):
         result = []
-        copied_keys = ['ImageId', 'Name', 'State', 'CreationDate']
+        copied_keys = ['ImageId', 'Name', 'State', 'CreationDate', 'OwnerId']
         ec2 = self.__get_session().client('ec2')
 
         try:
-            r = ec2.describe_images(
+            r_owned = ec2.describe_images(
                 Owners=[
                     'self'
                 ]
             )
+            if include_executable_images:
+                r_executable = ec2.describe_images(
+                    ExecutableUsers=[
+                        'self'
+                    ]
+                )
         except botocore.exceptions.ClientError as e:
             message = e.response['Error']['Message']
             logger.error(message)
             raise RuntimeError(message)
 
-        images = r.get('Images', [])
+        images = r_owned.get('Images', [])
+        if include_executable_images:
+            images += r_executable.get('Images', [])
         for image in images:
             i = {}
             for key in copied_keys:

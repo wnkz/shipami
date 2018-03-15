@@ -61,15 +61,17 @@ def cli(ctx, profile, region, verbose):
 
 @cli.command()
 @click.option('--quiet', '-q', is_flag=True)
+@click.option('--all', '-a', is_flag=True)
 @click.option('filter_', '--filter', '-f', multiple=True, callback=validate_filter)
 @click.option('--color/--no-color', default=True)
 @click.pass_obj
-def list(shipami, filter_, quiet, color):
-    headers = ['NAME', 'RELEASE', 'ID', 'STATE', 'CREATED', 'MANAGED', 'COPIED FROM', 'COPIED TO']
+def list(shipami, filter_, all, quiet, color):
+    headers = ['NAME', 'RELEASE', 'ID', 'OWNER ID', 'STATE', 'CREATED', 'MANAGED', 'COPIED FROM', 'COPIED TO']
     headers_mapping = {
         'NAME': 'Name',
         'RELEASE': 'Release',
         'ID': 'ImageId',
+        'OWNER ID': 'OwnerId',
         'STATE': 'State',
         'CREATED': 'CreationDate',
         'MANAGED': 'Managed',
@@ -99,7 +101,7 @@ def list(shipami, filter_, quiet, color):
 
     now = datetime.datetime.utcnow()
     try:
-        images = shipami.list()
+        images = shipami.list(include_executable_images=all)
     except RuntimeError as e:
         raise click.ClickException(str(e))
 
