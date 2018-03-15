@@ -16,7 +16,8 @@ class ShipAMI(object):
     MARKETPLACE_REGION = 'us-east-1'
     MARKETPLACE_ACCOUNT_ID = '679593333241'
 
-    def __init__(self, region=None):
+    def __init__(self, profile=None, region=None):
+        self._profile = profile
         self._region = region or boto3.session.Session().region_name
         self._sessions = {}
 
@@ -24,7 +25,7 @@ class ShipAMI(object):
         region = region or self._region
         session = self._sessions.get(region)
         if not session:
-            self._sessions[region] = boto3.session.Session(region_name=region)
+            self._sessions[region] = boto3.session.Session(profile_name=self._profile, region_name=region)
             session = self._sessions[region]
         return session
 

@@ -46,16 +46,17 @@ class AliasedGroup(click.Group):
 
 @click.group(cls=AliasedGroup)
 @click.version_option(VERSION)
+@click.option('--profile')
 @click.option('--region')
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.pass_context
-def cli(ctx, region, verbose):
+def cli(ctx, profile, region, verbose):
     """CLI tool to manage AWS AMI and Marketplace"""
     if verbose:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
-    ctx.obj = ShipAMI(region)
+    ctx.obj = ShipAMI(profile, region)
 
 
 @cli.command()
