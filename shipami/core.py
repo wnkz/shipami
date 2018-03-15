@@ -120,7 +120,7 @@ class ShipAMI(object):
         return dst_image.id
 
     def release(self, image_id, release, **kwargs):
-        image = self.__get_session().resource('ec2').Image(self.copy(image_id, name_suffix=release, **kwargs))
+        image = self.__get_session().resource('ec2').Image(self.copy(image_id, **kwargs))
         self.__set_tag(image, 'shipami:release', release)
         return image.id
 
@@ -177,11 +177,9 @@ class ShipAMI(object):
             deleted.append(image_id)
         return deleted
 
-    def __copy_image(self, src_image, name=None, name_suffix=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
+    def __copy_image(self, src_image, name=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
         try:
             name = name or src_image.name
-            if name_suffix:
-                name = '-'.join([name, name_suffix])
             name = self.validate_ami_name(name, clean=True)
             description = description or src_image.description
             src_region = src_image.meta.client.meta.region_name
