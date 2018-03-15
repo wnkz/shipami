@@ -124,7 +124,7 @@ class ShipAMI(object):
         self.__set_tag(image, 'shipami:release', release)
         return image.id
 
-    def share(self, image_id, account_id=None, remove=False):
+    def share(self, image_id, account_id=None, create_volume=False, remove=False):
         image = self.__get_session().resource('ec2').Image(image_id)
         account_id = account_id or self.MARKETPLACE_ACCOUNT_ID
         operation = 'add' if not remove else 'remove'
@@ -133,10 +133,11 @@ class ShipAMI(object):
         logger.debug('{} permissions for {} on image {}'.format(operation_log, account_id, image.id))
         self.__wait_for_image(image)
         self.__share_modify_attribute(image, 'launchPermission', operation, account_id)
-        for snapshot in self.__get_image_snapshots(image):
-            logger.debug('{} permissions for {} on snapshot {}'.format(operation_log, account_id, snapshot.id))
-            self.__wait_for_snapshot(snapshot)
-            self.__share_modify_attribute(snapshot, 'createVolumePermission', operation, account_id)
+        if create_volume:
+            for snapshot in self.__get_image_snapshots(image):
+                logger.debug('{} permissions for {} on snapshot {}'.format(operation_log, account_id, snapshot.id))
+                self.__wait_for_snapshot(snapshot)
+                self.__share_modify_attribute(snapshot, 'createVolumePermission', operation, account_id)
 
     def delete(self, image_ids, force=False):
         ec2 = self.__get_session().resource('ec2')

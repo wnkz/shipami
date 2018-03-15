@@ -231,6 +231,7 @@ def release(shipami, **kwargs):
 @cli.command()
 @click.argument('image-id')
 @click.option('--account-id')
+@click.option('--create-volume', is_flag=True, default=False)
 @click.option('--remove', is_flag=True, default=False)
 @click.pass_obj
 def share(shipami, **kwargs):
