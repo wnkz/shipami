@@ -80,7 +80,7 @@ setup(
 
     tests_require=[
         'pytest>=3.0.6',
-        'moto>=0.4.31'
+        'moto>=0.4.31,<1'
     ],
 
     zip_safe=False

@@ -16,7 +16,8 @@ class ShipAMI(object):
     MARKETPLACE_REGION = 'us-east-1'
     MARKETPLACE_ACCOUNT_ID = '679593333241'
 
-    def __init__(self, region=None):
+    def __init__(self, profile=None, region=None):
+        self._profile = profile
         self._region = region or boto3.session.Session().region_name
         self._sessions = {}
 
@@ -24,7 +25,7 @@ class ShipAMI(object):
         region = region or self._region
         session = self._sessions.get(region)
         if not session:
-            self._sessions[region] = boto3.session.Session(region_name=region)
+            self._sessions[region] = boto3.session.Session(profile_name=self._profile, region_name=region)
             session = self._sessions[region]
         return session
 
@@ -38,23 +39,31 @@ class ShipAMI(object):
             return ''.join(map(lambda _: _ if _.isalnum() or _ in allowed else '-', name))
         return name
 
-    def list(self):
+    def list(self, include_executable_images=False):
         result = []
-        copied_keys = ['ImageId', 'Name', 'State', 'CreationDate']
+        copied_keys = ['ImageId', 'Name', 'State', 'CreationDate', 'OwnerId']
         ec2 = self.__get_session().client('ec2')
 
         try:
-            r = ec2.describe_images(
+            r_owned = ec2.describe_images(
                 Owners=[
                     'self'
                 ]
             )
+            if include_executable_images:
+                r_executable = ec2.describe_images(
+                    ExecutableUsers=[
+                        'self'
+                    ]
+                )
         except botocore.exceptions.ClientError as e:
             message = e.response['Error']['Message']
             logger.error(message)
             raise RuntimeError(message)
 
-        images = r.get('Images', [])
+        images = r_owned.get('Images', [])
+        if include_executable_images:
+            images += r_executable.get('Images', [])
         for image in images:
             i = {}
             for key in copied_keys:
@@ -111,11 +120,11 @@ class ShipAMI(object):
         return dst_image.id
 
     def release(self, image_id, release, **kwargs):
-        image = self.__get_session().resource('ec2').Image(self.copy(image_id, name_suffix=release, **kwargs))
+        image = self.__get_session().resource('ec2').Image(self.copy(image_id, **kwargs))
         self.__set_tag(image, 'shipami:release', release)
         return image.id
 
-    def share(self, image_id, account_id=None, remove=False):
+    def share(self, image_id, account_id=None, create_volume=False, remove=False):
         image = self.__get_session().resource('ec2').Image(image_id)
         account_id = account_id or self.MARKETPLACE_ACCOUNT_ID
         operation = 'add' if not remove else 'remove'
@@ -124,10 +133,11 @@ class ShipAMI(object):
         logger.debug('{} permissions for {} on image {}'.format(operation_log, account_id, image.id))
         self.__wait_for_image(image)
         self.__share_modify_attribute(image, 'launchPermission', operation, account_id)
-        for snapshot in self.__get_image_snapshots(image):
-            logger.debug('{} permissions for {} on snapshot {}'.format(operation_log, account_id, snapshot.id))
-            self.__wait_for_snapshot(snapshot)
-            self.__share_modify_attribute(snapshot, 'createVolumePermission', operation, account_id)
+        if create_volume:
+            for snapshot in self.__get_image_snapshots(image):
+                logger.debug('{} permissions for {} on snapshot {}'.format(operation_log, account_id, snapshot.id))
+                self.__wait_for_snapshot(snapshot)
+                self.__share_modify_attribute(snapshot, 'createVolumePermission', operation, account_id)
 
     def delete(self, image_ids, force=False):
         ec2 = self.__get_session().resource('ec2')
@@ -168,11 +178,9 @@ class ShipAMI(object):
             deleted.append(image_id)
         return deleted
 
-    def __copy_image(self, src_image, name=None, name_suffix=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
+    def __copy_image(self, src_image, name=None, description=None, copy_tags=True, copy_tags_to_snapshots=False, copy_permissions=False, wait=False):
         try:
             name = name or src_image.name
-            if name_suffix:
-                name = '-'.join([name, name_suffix])
             name = self.validate_ami_name(name, clean=True)
             description = description or src_image.description
             src_region = src_image.meta.client.meta.region_name

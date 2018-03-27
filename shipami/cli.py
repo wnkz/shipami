@@ -46,29 +46,32 @@ class AliasedGroup(click.Group):
 
 @click.group(cls=AliasedGroup)
 @click.version_option(VERSION)
+@click.option('--profile')
 @click.option('--region')
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.pass_context
-def cli(ctx, region, verbose):
+def cli(ctx, profile, region, verbose):
     """CLI tool to manage AWS AMI and Marketplace"""
     if verbose:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
-    ctx.obj = ShipAMI(region)
+    ctx.obj = ShipAMI(profile, region)
 
 
 @cli.command()
 @click.option('--quiet', '-q', is_flag=True)
+@click.option('--all', '-a', is_flag=True)
 @click.option('filter_', '--filter', '-f', multiple=True, callback=validate_filter)
 @click.option('--color/--no-color', default=True)
 @click.pass_obj
-def list(shipami, filter_, quiet, color):
-    headers = ['NAME', 'RELEASE', 'ID', 'STATE', 'CREATED', 'MANAGED', 'COPIED FROM', 'COPIED TO']
+def list(shipami, filter_, all, quiet, color):
+    headers = ['NAME', 'RELEASE', 'ID', 'OWNER ID', 'STATE', 'CREATED', 'MANAGED', 'COPIED FROM', 'COPIED TO']
     headers_mapping = {
         'NAME': 'Name',
         'RELEASE': 'Release',
         'ID': 'ImageId',
+        'OWNER ID': 'OwnerId',
         'STATE': 'State',
         'CREATED': 'CreationDate',
         'MANAGED': 'Managed',
@@ -98,7 +101,7 @@ def list(shipami, filter_, quiet, color):
 
     now = datetime.datetime.utcnow()
     try:
-        images = shipami.list()
+        images = shipami.list(include_executable_images=all)
     except RuntimeError as e:
         raise click.ClickException(str(e))
 
@@ -228,6 +231,7 @@ def release(shipami, **kwargs):
 @cli.command()
 @click.argument('image-id')
 @click.option('--account-id')
+@click.option('--create-volume', is_flag=True, default=False)
 @click.option('--remove', is_flag=True, default=False)
 @click.pass_obj
 def share(shipami, **kwargs):
